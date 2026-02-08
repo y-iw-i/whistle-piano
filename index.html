@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>口笛→鍵盤ナビ（試作）</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 16px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    button { padding: 10px 14px; font-size: 16px; }
+    .panel { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin-top: 12px; }
+    .big { font-size: 28px; font-weight: 700; }
+    .muted { color: #666; }
+    .kbd { user-select: none; margin-top: 10px; }
+    .keys { position: relative; height: 140px; width: min(980px, 100%); border: 1px solid #ccc; border-radius: 10px; overflow: hidden; background: #fafafa; }
+    .white { position: absolute; bottom: 0; height: 140px; border: 1px solid #bbb; background: white; border-radius: 0 0 6px 6px; }
+    .black { position: absolute; bottom: 60px; height: 80px; background: #222; border-radius: 0 0 6px 6px; }
+    .white.active { background: #dff1ff; }
+    .black.active { background: #2b7fff; }
+    .label { position: absolute; bottom: 6px; width: 100%; text-align: center; font-size: 12px; color: #333; }
+    .black .label { color: #eee; bottom: 4px; font-size: 11px; }
+    input[type="range"] { width: 260px; }
+    code { background: #f3f3f3; padding: 2px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h1>口笛→鍵盤ナビ（試作）🎹🫧</h1>
+
+  <div class="row">
+    <button id="btnStart">マイク開始</button>
+    <button id="btnStop" disabled>停止</button>
+
+    <div class="row">
+      <div>
+        <div class="muted">基準A4 (Hz) ※おもちゃピアノ補正用</div>
+        <input id="a4" type="range" min="415" max="466" step="1" value="440">
+        <span id="a4Val">440</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="muted">推定結果</div>
+    <div class="big" id="noteText">—</div>
+    <div class="row">
+      <div>周波数: <code id="freqText">—</code> Hz</div>
+      <div>ズレ: <code id="centText">—</code> cent</div>
+      <div>信頼度: <code id="confText">—</code></div>
+    </div>
+    <div class="muted" style="margin-top:8px;">
+      コツ：口笛は「細く」「一定の強さ」「スマホ/PCから20〜40cm」くらいが安定しやすい。
+    </div>
+  </div>
+
+  <div class="panel kbd">
+    <div class="muted">鍵盤表示（C4〜B5の2オクターブ）</div>
+    <div class="keys" id="keys"></div>
+  </div>
+
+<script>
+(() => {
+  // ====== 設定（ここを変えると表示鍵盤範囲を調整できる） ======
+  // 例: toy pianoがもっと低い/高いなら startMidi/endMidi を変える
+  const startMidi = 60; // C4
+  const endMidi   = 83; // B5（2オクターブ）
+  const noteNames = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+
+  // ====== DOM ======
+  const btnStart = document.getElementById("btnStart");
+  const btnStop  = document.getElementById("btnStop");
+  const a4 = document.getElementById("a4");
+  const a4Val = document.getElementById("a4Val");
+  const noteText = document.getElementById("noteText");
+  const freqText = document.getElementById("freqText");
+  const centText = document.getElementById("centText");
+  const confText = document.getElementById("confText");
+  const keysEl = document.getElementById("keys");
+
+  a4.addEventListener("input", () => a4Val.textContent = a4.value);
+
+  // ====== 鍵盤描画 ======
+  // 白鍵の並びだけで等分し、黒鍵は上に重ねる簡易表示
+  const whitePattern = [0,2,4,5,7,9,11]; // C D E F G A B
+  const blackSet = new Set([1,3,6,8,10]); // C#,D#,F#,G#,A#
+
+  const midiToFreq = (m, A4=440) => A4 * Math.pow(2, (m - 69) / 12);
+  const midiToName = (m) => {
+    const name = noteNames[m % 12];
+    const oct = Math.floor(m / 12) - 1;
+    return `${name}${oct}`;
+  };
+
+  // 白鍵の数を数えて横幅割り当て
+  const whiteMidis = [];
+  for (let m = startMidi; m <= endMidi; m++) {
+    if (!blackSet.has(m % 12)) whiteMidis.push(m);
+  }
+  const whiteCount = whiteMidis.length;
+
+  const keyDivByMidi = new Map();
+
+  function renderKeys() {
+    keysEl.innerHTML = "";
+    const W = keysEl.clientWidth;
+    const whiteW = W / whiteCount;
+
+    // 白鍵
+    whiteMidis.forEach((m, i) => {
+      const d = document.createElement("div");
+      d.className = "white";
+      d.style.left = `${i * whiteW}px`;
+      d.style.width = `${whiteW}px`;
+      d.dataset.midi = m;
+
+      const lab = document.createElement("div");
+      lab.className = "label";
+      lab.textContent = midiToName(m);
+      d.appendChild(lab);
+
+      keysEl.appendChild(d);
+      keyDivByMidi.set(m, d);
+    });
+
+    // 黒鍵（白鍵の間に配置する簡易ロジック）
+    // 黒鍵は「C# は CとDの間」などなので、直前の白鍵indexを探して置く
+    for (let m = startMidi; m <= endMidi; m++) {
+      if (!blackSet.has(m % 12)) continue;
+
+      // この黒鍵の直前の白鍵m-1を見つける（例: C#ならC）
+      let prevWhite = m - 1;
+      while (prevWhite >= startMidi && blackSet.has(prevWhite % 12)) prevWhite--;
+      const prevIndex = whiteMidis.indexOf(prevWhite);
+      if (prevIndex < 0) continue;
+
+      const d = document.createElement("div");
+      d.className = "black";
+      const bw = whiteW * 0.62;
+      d.style.width = `${bw}px`;
+      d.style.left = `${(prevIndex + 1) * whiteW - bw/2}px`; // 間の真ん中
+      d.dataset.midi = m;
+
+      const lab = document.createElement("div");
+      lab.className = "label";
+      lab.textContent = midiToName(m);
+      d.appendChild(lab);
+
+      keysEl.appendChild(d);
+      keyDivByMidi.set(m, d);
+    }
+  }
+  renderKeys();
+  window.addEventListener("resize", renderKeys);
+
+  // ====== 音程推定（自己相関ベース） ======
+  let audioCtx, analyser, mediaStream;
+  let rafId = null;
+
+  function autoCorrelate(buf, sampleRate) {
+    // ざっくり信頼度つきピッチ推定
+    // 参考：自己相関。静音時はnull。
+    const SIZE = buf.length;
+    let rms = 0;
+    for (let i = 0; i < SIZE; i++) {
+      const v = buf[i];
+      rms += v * v;
+    }
+    rms = Math.sqrt(rms / SIZE);
+    if (rms < 0.012) return {freq: null, conf: 0}; // 小さすぎ
+
+    // DC除去（平均を引く）
+    let mean = 0;
+    for (let i = 0; i < SIZE; i++) mean += buf[i];
+    mean /= SIZE;
+    for (let i = 0; i < SIZE; i++) buf[i] -= mean;
+
+    // 自己相関
+    const maxLag = Math.floor(sampleRate / 50);   // 50Hzまで
+    const minLag = Math.floor(sampleRate / 2000); // 2000Hzまで
+    let bestLag = -1;
+    let bestCorr = 0;
+
+    for (let lag = minLag; lag <= maxLag; lag++) {
+      let corr = 0;
+      for (let i = 0; i < SIZE - lag; i++) {
+        corr += buf[i] * buf[i + lag];
+      }
+      if (corr > bestCorr) {
+        bestCorr = corr;
+        bestLag = lag;
+      }
+    }
+
+    // 信頼度っぽい値（rmsと相関）
+    const conf = Math.min(1, bestCorr / (SIZE * 0.12));
+
+    if (bestLag <= 0 || conf < 0.12) return {freq: null, conf};
+
+    const freq = sampleRate / bestLag;
+    return {freq, conf};
+  }
+
+  function freqToMidi(f, A4=440) {
+    return 69 + 12 * Math.log2(f / A4);
+  }
+  function centsOffFromMidi(f, midi, A4=440) {
+    const ref = midiToFreq(midi, A4);
+    return 1200 * Math.log2(f / ref);
+  }
+  function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
+
+  // 平滑化（フラつき抑制）
+  let smoothFreq = null;
+  function smooth(newF) {
+    const alpha = 0.22; // 0に近いほどヌルヌル、1に近いほど即応
+    if (smoothFreq == null) smoothFreq = newF;
+    smoothFreq = smoothFreq * (1 - alpha) + newF * alpha;
+    return smoothFreq;
+  }
+
+  function clearActive() {
+    for (const d of keyDivByMidi.values()) d.classList.remove("active");
+  }
+
+  function setActive(midi) {
+    clearActive();
+    const d = keyDivByMidi.get(midi);
+    if (d) d.classList.add("active");
+  }
+
+  function loop() {
+    const A4 = Number(a4.value);
+    const buf = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(buf);
+
+    const {freq, conf} = autoCorrelate(buf, audioCtx.sampleRate);
+
+    if (!freq) {
+      noteText.textContent = "—";
+      freqText.textContent = "—";
+      centText.textContent = "—";
+      confText.textContent = conf.toFixed(2);
+      clearActive();
+      rafId = requestAnimationFrame(loop);
+      return;
+    }
+
+    const f = smooth(freq);
+    const midiFloat = freqToMidi(f, A4);
+    const midiNearest = Math.round(midiFloat);
+
+    // 表示範囲に収める（範囲外は端を光らせる）
+    const midiClamped = clamp(midiNearest, startMidi, endMidi);
+
+    const cents = centsOffFromMidi(f, midiNearest, A4);
+
+    noteText.textContent = midiToName(midiNearest);
+    freqText.textContent = f.toFixed(1);
+    centText.textContent = (cents >= 0 ? "+" : "") + cents.toFixed(0);
+    confText.textContent = conf.toFixed(2);
+
+    setActive(midiClamped);
+
+    rafId = requestAnimationFrame(loop);
+  }
+
+  async function start() {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const src = audioCtx.createMediaStreamSource(mediaStream);
+
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.0;
+
+    src.connect(analyser);
+
+    btnStart.disabled = true;
+    btnStop.disabled = false;
+
+    smoothFreq = null;
+    rafId = requestAnimationFrame(loop);
+  }
+
+  async function stop() {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    clearActive();
+
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(t => t.stop());
+      mediaStream = null;
+    }
+    if (audioCtx) {
+      await audioCtx.close();
+      audioCtx = null;
+    }
+
+    btnStart.disabled = false;
+    btnStop.disabled = true;
+
+    noteText.textContent = "—";
+    freqText.textContent = "—";
+    centText.textContent = "—";
+    confText.textContent = "—";
+  }
+
+  btnStart.addEventListener("click", () => start().catch(err => {
+    alert("マイク開始に失敗: " + err.message);
+    console.error(err);
+  }));
+  btnStop.addEventListener("click", () => stop());
+
+})();
+</script>
+</body>
+</html>
