@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>口笛ピアノナビ 実機配列</title>
+  <title>口笛ピアノナビ 21鍵</title>
   <style>
     :root{--bg:#f3f8fc;--card:#fff;--ink:#163042;--line:#c8d9e3;--ok:#27935d;--warn:#d68a2a;--bad:#c94b49}
     *{box-sizing:border-box}body{margin:0;background:linear-gradient(150deg,#ecf6ff,#fff7eb);font-family:"Yu Gothic","Meiryo",sans-serif;color:var(--ink)}
@@ -42,8 +42,8 @@
 </head>
 <body>
   <div class="app">
-    <h1>口笛ピアノナビ 実機配列</h1>
-    <p class="sub">口笛の音程を検出し、今押すべき鍵盤位置を表示します（端末内処理）。</p>
+    <h1>口笛ピアノナビ 21鍵</h1>
+    <p class="sub">口笛の音程を検出し、今押すべき鍵盤位置を表示します（端末内処理）。Key ID採番ルール: 左→右の物理順（白黒共通連番）。</p>
 
     <section class="panel status">
       <div class="box"><div class="t">マイク</div><div class="mic"><span id="lamp" class="lamp off"></span><span id="micText">OFF</span></div></div>
@@ -67,12 +67,13 @@
 
     <section id="calPanel" class="panel hide2">
       <h2>校正モード</h2>
-      <p class="small">各鍵盤を2.0秒計測。最後1.0秒の中央値を保存します。</p>
+      <p class="small">3点固定校正: Key 1 / Key 11 / Key 21 を各2.0秒計測し、最後1.0秒中央値を使用します。</p>
+      <p class="small">Key ID採番ルール: 左→右の物理順（白黒共通連番）。</p>
       <div id="target" class="target">待機中</div>
       <div class="prog"><div id="pg"></div></div>
       <div id="sub" class="small">校正開始を押してください</div>
       <div id="wmsg" class="wmsg"></div>
-      <div class="row"><button id="calStart" class="pri">全鍵を校正</button><button id="calCancel" class="warn" disabled>中止</button></div>
+      <div class="row"><button id="calStart" class="pri">3点校正を開始</button><button id="calCancel" class="warn" disabled>中止</button></div>
       <div id="calMeta" class="small"></div>
     </section>
 
@@ -110,25 +111,55 @@
     (() => {
       "use strict";
       /*
-       * Physical layout (photo-based, fixed)
-       * - 白鍵数: 14
-       * - 黒鍵数: 10
-       * - 合計鍵盤数: 24
-       * - 黒鍵グルーピング: 3-2-3-2
+       * Layout definition (fixed)
+       * - 白鍵数: 13
+       * - 黒鍵数: 8
+       * - 合計鍵盤数: 21
        * - Key ID採番ルール: 左から右へ物理順（白鍵/黒鍵を同一連番）
+       * - 固定3点校正キー: Key 1 / Key 11 / Key 21
        */
-      const INSTRUMENT = "KAWAI_toy_piano_photo_layout_24";
+      const INSTRUMENT = "KAWAI_toy_piano_21_three_point";
       const MIN_HZ = 300, MAX_HZ = 2500, STABLE_FRAMES = 6, HOLD_MS = 1600;
       const STATES = {S0:"S0",S1:"S1",S2:"S2",S3:"S3",S4:"S4"};
       const SENS = {low:{conf:0.5,rms:0.02},mid:{conf:0.38,rms:0.015},high:{conf:0.28,rms:0.011}};
-      const WHITE_KEY_COUNT = 14;
-      const BLACK_GROUPS = [3,2,3,2];
-      const BLACK_BOUNDARIES = buildBlackBoundaries(WHITE_KEY_COUNT, BLACK_GROUPS);
-      const KEYS = buildPhysicalKeys(WHITE_KEY_COUNT, BLACK_BOUNDARIES);
+      const PROJECT_KEY_COUNT = 21;
+      const C4_FREQ = 261.625565;
+      const CALIBRATION_KEY_IDS = [1,11,21];
+      const CALIBRATION_HINT = new Map([[1,"低音"],[11,"中音"],[21,"高音"]]);
+      const KEYS = [
+        {id:1, black:false, semitone:0, defaultLabel:"ド"},
+        {id:2, black:true, semitone:1, defaultLabel:"ド♯"},
+        {id:3, black:false, semitone:2, defaultLabel:"レ"},
+        {id:4, black:true, semitone:3, defaultLabel:"レ♯"},
+        {id:5, black:false, semitone:4, defaultLabel:"ミ"},
+        {id:6, black:false, semitone:5, defaultLabel:"ファ"},
+        {id:7, black:true, semitone:6, defaultLabel:"ファ♯"},
+        {id:8, black:false, semitone:7, defaultLabel:"ソ"},
+        {id:9, black:true, semitone:8, defaultLabel:"ソ♯"},
+        {id:10, black:false, semitone:9, defaultLabel:"ラ"},
+        {id:11, black:true, semitone:10, defaultLabel:"ラ♯"},
+        {id:12, black:false, semitone:11, defaultLabel:"シ"},
+        {id:13, black:false, semitone:12, defaultLabel:"ド"},
+        {id:14, black:true, semitone:13, defaultLabel:"ド♯"},
+        {id:15, black:false, semitone:14, defaultLabel:"レ"},
+        {id:16, black:true, semitone:15, defaultLabel:"レ♯"},
+        {id:17, black:false, semitone:16, defaultLabel:"ミ"},
+        {id:18, black:false, semitone:17, defaultLabel:"ファ"},
+        {id:19, black:true, semitone:18, defaultLabel:"ファ♯"},
+        {id:20, black:false, semitone:19, defaultLabel:"ソ"},
+        {id:21, black:false, semitone:21, defaultLabel:"ラ"}
+      ];
+      const TOTAL_KEYS = PROJECT_KEY_COUNT;
       const WHITE_COUNT = KEYS.filter(k=>!k.black).length;
       const BLACK_COUNT = KEYS.filter(k=>k.black).length;
-      const TOTAL_KEYS = KEYS.length;
-      const DEFAULT_KEY_LABELS = Object.fromEntries(KEYS.map(k=>[String(k.id),""]));
+      if(KEYS.length!==TOTAL_KEYS) throw new Error(`KEYS length mismatch: expected ${TOTAL_KEYS}, got ${KEYS.length}`);
+      const DEFAULT_KEY_LABELS = Object.fromEntries(KEYS.map(k=>[String(k.id),k.defaultLabel]));
+      const REFERENCE_KEYS = KEYS.map(k=>({
+        id:k.id,
+        label:k.defaultLabel,
+        freq_hz:Number((C4_FREQ*Math.pow(2,k.semitone/12)).toFixed(6))
+      }));
+      const REFERENCE_BY_ID = new Map(REFERENCE_KEYS.map(k=>[k.id,k]));
       const KEY_MAP = new Map(KEYS.map(k=>[k.id,k]));
       const E = {
         lamp:gid("lamp"),micText:gid("micText"),vu:[...document.querySelectorAll("#vu .b")],stateBadge:gid("stateBadge"),
@@ -152,7 +183,7 @@
         renderKeys();
         registerSW();
         bind();
-        E.calStart.textContent=`全${TOTAL_KEYS}鍵を校正`;
+        E.calStart.textContent=`3点校正 (Key ${CALIBRATION_KEY_IDS.join(" / Key ")})`;
         await store.init();
         await loadSaved();
         updateCalMeta();
@@ -342,12 +373,12 @@
 
       function uiMessage(){
         if(Date.now()<msgUntil){E.msg.textContent=msgTmp;return;}
-        if(cals.on){E.msg.textContent="校正中: 指示された鍵盤を鳴らしてください";return;}
+        if(cals.on){E.msg.textContent=`3点校正中: Key ${CALIBRATION_KEY_IDS.join(" / Key ")} を順に鳴らしてください`;return;}
         if(play.on){E.msg.textContent="再生ナビ中";return;}
         if(state===STATES.S0){E.msg.textContent="開始ボタンを押してください";return;}
         if(state===STATES.S1){E.msg.textContent="マイク許可を待っています";return;}
         if(state===STATES.S2){
-          if(!cal||reason==="needCal"){E.msg.textContent="まず校正を完了してください";return;}
+          if(!cal||reason==="needCal"){E.msg.textContent=`まず3点校正（Key ${CALIBRATION_KEY_IDS.join("/")}）を完了してください`;return;}
           if(reason==="quiet"){E.msg.textContent="音が小さいです";return;}
           if(reason==="out"){E.msg.textContent="300〜2500Hzの範囲で吹いてください";return;}
           if(reason==="lowConf"||reason==="unvoiced"){E.msg.textContent="音を一定に";return;}
@@ -361,7 +392,8 @@
         if(!settings.debug) return;
         E.dbgText.textContent=[
           `state: ${state}`,`mic: ${mic}`,`reason: ${reason}`,
-          `layout: white=${WHITE_COUNT} black=${BLACK_COUNT} total=${TOTAL_KEYS} groups=${BLACK_GROUPS.join("-")}`,
+          `layout: white=${WHITE_COUNT} black=${BLACK_COUNT} total=${TOTAL_KEYS} id_rule=left_to_right_physical`,
+          `cal_keys: ${CALIBRATION_KEY_IDS.join(",")}`,
           `f0_hz(raw): ${pitch.freq?pitch.freq.toFixed(2):"-"}`,`f0_hz(ema): ${ema?ema.toFixed(2):"-"}`,
           `confidence: ${pitch.conf.toFixed(3)}`,`rms: ${pitch.rms.toFixed(4)}`,
           `candidate: ${cand.id?`Key ${cand.id} (${cand.frames}/${STABLE_FRAMES})`:"-"}`,
@@ -400,33 +432,44 @@
         calOpen=true; cals.on=true; cals.cancel=false;
         E.wmsg.textContent=""; E.sub.textContent="計測を開始します"; E.pg.style.width="0%"; ui();
         const rows=[];
-        for(let i=0;i<KEYS.length;i++){
+        for(let i=0;i<CALIBRATION_KEY_IDS.length;i++){
           if(cals.cancel) break;
-          const k=KEYS[i]; let done=false;
+          const keyId=CALIBRATION_KEY_IDS[i];
+          const key=KEY_MAP.get(keyId);
+          let done=false;
           while(!done&&!cals.cancel){
-            const sub=getKeyLabel(k.id);
-            E.target.textContent=sub?`Key ${k.id}（${sub}）を鳴らしてください`:`Key ${k.id} を鳴らしてください`;
-            const cap=await calStep(i);
+            const sub=getKeyLabel(keyId);
+            const hint=CALIBRATION_HINT.get(keyId)||"";
+            const keyName=sub?`Key ${keyId}（${sub}）`:`Key ${keyId}`;
+            E.target.textContent=hint?`${keyName} を鳴らしてください（${hint}）`:`${keyName} を鳴らしてください`;
+            const cap=await calStep(i,CALIBRATION_KEY_IDS.length);
             if(cap.cancelled) break;
             if(!cap.ok){E.wmsg.textContent="音が小さいか不安定です。同じ鍵盤をもう一度。"; await sleep(220); continue;}
-            rows.push({id:k.id,label:getKeyLabel(k.id),freq_hz:Number(cap.median.toFixed(3))});
+            rows.push({id:key.id,label:getKeyLabel(key.id),measured_freq_hz:Number(cap.median.toFixed(3))});
             E.wmsg.textContent=cap.warn||""; done=true; await sleep(120);
           }
         }
         cals.on=false; E.calCancel.disabled=true;
-        if(!cals.cancel&&rows.length===KEYS.length){
-          cal={instrument:INSTRUMENT,created_at:new Date().toISOString(),keys:rows};
-          await store.set("calibration",cal); updateCalMeta(); flash("校正データを保存しました",2400);
+        if(!cals.cancel&&rows.length===CALIBRATION_KEY_IDS.length){
+          const built=buildThreePointCalibration(rows);
+          if(!built.ok){
+            flash(`校正計算に失敗: ${built.err}`,2800);
+            reason="needCal";
+            ui();
+            return;
+          }
+          cal=built.data;
+          await store.set("calibration",cal); updateCalMeta(); flash("3点校正データを保存しました",2400);
         }else if(cals.cancel) flash("校正を中止しました",1800);
         reason=cal?"quiet":"needCal"; ui();
       }
 
-      function calStep(iKey){
+      function calStep(iKey,totalSteps){
         const dur=2000, tail=1000, t0=performance.now(), s=[];
         return new Promise(resolve=>{
           const go=()=>{
             if(!cals.on||cals.cancel){resolve({cancelled:true});return;}
-            const e=performance.now()-t0, r=clamp(e/dur,0,1), all=(iKey+r)/KEYS.length;
+            const e=performance.now()-t0, r=clamp(e/dur,0,1), all=(iKey+r)/totalSteps;
             E.pg.style.width=`${(all*100).toFixed(1)}%`; E.sub.textContent=`計測中: 残り ${Math.max(0,(dur-e)/1000).toFixed(1)} 秒`;
             if(pitch.freq&&pitch.inRange&&pitch.conf>=0.18) s.push({t:e,f:pitch.freq,rms:pitch.rms});
             if(e<dur){requestAnimationFrame(go);return;}
@@ -437,6 +480,62 @@
           };
           go();
         });
+      }
+
+      function buildThreePointCalibration(anchorRows){
+        const byId=new Map(anchorRows.map(r=>[Number(r.id),r]));
+        const anchors=[];
+        for(const id of CALIBRATION_KEY_IDS){
+          const measured=byId.get(id);
+          if(!measured) return {ok:false,err:`Key ${id} の計測値がありません`};
+          const mhz=Number(measured.measured_freq_hz);
+          if(!Number.isFinite(mhz)||mhz<=0) return {ok:false,err:`Key ${id} の測定周波数が不正です`};
+          const ref=REFERENCE_BY_ID.get(id);
+          anchors.push({
+            id,
+            label:getKeyLabel(id),
+            measured_freq_hz:Number(mhz.toFixed(3)),
+            reference_freq_hz:Number(ref.freq_hz.toFixed(6))
+          });
+        }
+        const n=anchors.length;
+        let sumX=0,sumY=0,sumXX=0,sumXY=0;
+        for(const a of anchors){
+          const x=Math.log2(a.reference_freq_hz);
+          const y=Math.log2(a.measured_freq_hz);
+          sumX+=x; sumY+=y; sumXX+=x*x; sumXY+=x*y;
+        }
+        const den=n*sumXX-sumX*sumX;
+        if(Math.abs(den)<1e-10) return {ok:false,err:"回帰計算の分母が0です"};
+        const alpha=(n*sumXY-sumX*sumY)/den;
+        const beta=(sumY-alpha*sumX)/n;
+        if(!Number.isFinite(alpha)||!Number.isFinite(beta)) return {ok:false,err:"α/βが計算できません"};
+        if(alpha<=0) return {ok:false,err:"αが0以下です（測定をやり直してください）"};
+
+        const correctedKeys=KEYS.map(k=>{
+          const ref=REFERENCE_BY_ID.get(k.id);
+          const p=Math.log2(ref.freq_hz);
+          const corrected=Math.pow(2,alpha*p+beta);
+          return {
+            id:k.id,
+            label:getKeyLabel(k.id),
+            freq_hz:Number(corrected.toFixed(3))
+          };
+        });
+        return {
+          ok:true,
+          data:{
+            instrument:INSTRUMENT,
+            created_at:new Date().toISOString(),
+            calibration_mode:"three_point_fixed",
+            key_id_rule:"left_to_right_physical_order",
+            base_key_ids:[...CALIBRATION_KEY_IDS],
+            alpha:Number(alpha.toFixed(9)),
+            beta:Number(beta.toFixed(9)),
+            anchors,
+            keys:correctedKeys
+          }
+        };
       }
 
       async function startRec(){
@@ -518,8 +617,11 @@
 
       function updateCalMeta(){
         if(!cal){E.calMeta.textContent="校正データ: 未保存";return;}
-        const dt=new Date(cal.created_at), f1=cal.keys[0].freq_hz.toFixed(1), f2=cal.keys[cal.keys.length-1].freq_hz.toFixed(1);
-        E.calMeta.textContent=`校正データ: ${dt.toLocaleString("ja-JP")} / ${cal.keys.length}鍵 / ${f1}Hz〜${f2}Hz`;
+        const dt=new Date(cal.created_at);
+        const f1=cal.keys[0].freq_hz.toFixed(1), f2=cal.keys[cal.keys.length-1].freq_hz.toFixed(1);
+        const ids=(cal.base_key_ids||[]).join("/");
+        const a=Number(cal.alpha||0).toFixed(6), b=Number(cal.beta||0).toFixed(6);
+        E.calMeta.textContent=`3点校正: ${dt.toLocaleString("ja-JP")} / 基準Key ${ids} / α=${a} β=${b} / ${cal.keys.length}鍵 / ${f1}Hz〜${f2}Hz`;
       }
 
       function renderLabelEditor(){
@@ -540,6 +642,10 @@
             if(cal&&Array.isArray(cal.keys)){
               const row=cal.keys.find(r=>r.id===key.id);
               if(row) row.label=settings.keyLabels[String(key.id)];
+              if(Array.isArray(cal.anchors)){
+                const a=cal.anchors.find(v=>v.id===key.id);
+                if(a) a.label=settings.keyLabels[String(key.id)];
+              }
               await store.set("calibration",cal);
               updateCalMeta();
             }
@@ -555,7 +661,11 @@
 
       function getKeyLabel(id){
         if(!settings.keyLabels) settings.keyLabels={...DEFAULT_KEY_LABELS};
-        return String(settings.keyLabels[String(id)]||"");
+        const keyId=String(id);
+        const raw=settings.keyLabels[keyId];
+        if(typeof raw==="string"&&raw.trim()!=="") return raw.trim();
+        const key=KEY_MAP.get(Number(id));
+        return key&&typeof key.defaultLabel==="string" ? key.defaultLabel : "";
       }
 
       async function resetCal(){
@@ -580,6 +690,35 @@
       function validateCal(raw){
         if(!raw||typeof raw!=="object") return {ok:false,err:"JSONオブジェクトではありません"};
         if(raw.instrument!==INSTRUMENT) return {ok:false,err:"instrument が一致しません"};
+        if(raw.calibration_mode!=="three_point_fixed") return {ok:false,err:"calibration_mode は three_point_fixed が必要です"};
+        if(raw.key_id_rule!=="left_to_right_physical_order") return {ok:false,err:"key_id_rule が不正です"};
+        if(!Array.isArray(raw.base_key_ids)) return {ok:false,err:"base_key_ids がありません"};
+        const baseIds=raw.base_key_ids.map(v=>Number(v));
+        if(baseIds.length!==CALIBRATION_KEY_IDS.length||baseIds.some((v,i)=>v!==CALIBRATION_KEY_IDS[i])){
+          return {ok:false,err:`base_key_ids は ${CALIBRATION_KEY_IDS.join(",")} 固定です`};
+        }
+        if(!Number.isFinite(Number(raw.alpha))||!Number.isFinite(Number(raw.beta))){
+          return {ok:false,err:"alpha/beta が不正です"};
+        }
+        if(!Array.isArray(raw.anchors)||raw.anchors.length!==CALIBRATION_KEY_IDS.length){
+          return {ok:false,err:"anchors が不正です"};
+        }
+        const anchorMap=new Map(raw.anchors.map(a=>[Number(a.id),a]));
+        const anchors=[];
+        for(const id of CALIBRATION_KEY_IDS){
+          const a=anchorMap.get(id);
+          if(!a) return {ok:false,err:`anchor Key ${id} がありません`};
+          const mhz=Number(a.measured_freq_hz);
+          const rhz=Number(a.reference_freq_hz);
+          if(!Number.isFinite(mhz)||mhz<=0) return {ok:false,err:`anchor Key ${id} measured_freq_hz が不正です`};
+          if(!Number.isFinite(rhz)||rhz<=0) return {ok:false,err:`anchor Key ${id} reference_freq_hz が不正です`};
+          anchors.push({
+            id,
+            label:String(a.label||getKeyLabel(id)||""),
+            measured_freq_hz:Number(mhz.toFixed(3)),
+            reference_freq_hz:Number(rhz.toFixed(6))
+          });
+        }
         if(!Array.isArray(raw.keys)||raw.keys.length!==KEYS.length) return {ok:false,err:`keys は${TOTAL_KEYS}件必要です`};
         const m=new Map(raw.keys.map(x=>[Number(x.id),x])), n=[];
         for(const b of KEYS){
@@ -587,7 +726,17 @@
           const hz=Number(it.freq_hz); if(!Number.isFinite(hz)||hz<=0) return {ok:false,err:`Key ${b.id} のfreq_hzが不正です`};
           n.push({id:b.id,label:String(it.label||getKeyLabel(b.id)||""),freq_hz:Number(hz.toFixed(3))});
         }
-        return {ok:true,data:{instrument:INSTRUMENT,created_at:typeof raw.created_at==="string"?raw.created_at:new Date().toISOString(),keys:n}};
+        return {ok:true,data:{
+          instrument:INSTRUMENT,
+          created_at:typeof raw.created_at==="string"?raw.created_at:new Date().toISOString(),
+          calibration_mode:"three_point_fixed",
+          key_id_rule:"left_to_right_physical_order",
+          base_key_ids:[...CALIBRATION_KEY_IDS],
+          alpha:Number(Number(raw.alpha).toFixed(9)),
+          beta:Number(Number(raw.beta).toFixed(9)),
+          anchors,
+          keys:n
+        }};
       }
 
       function sanitizeEvents(arr){
@@ -607,30 +756,6 @@
             settings.keyLabels[id]=row.label.trim();
           }
         }
-      }
-
-      function buildBlackBoundaries(whiteCount, groups){
-        const out=[]; let cursor=1;
-        for(let gi=0;gi<groups.length;gi++){
-          const g=groups[gi];
-          for(let i=0;i<g;i++) out.push(cursor+i);
-          cursor+=g;
-          if(gi<groups.length-1) cursor+=1;
-        }
-        const maxBoundary=whiteCount-1;
-        return out.filter(x=>x>=1&&x<=maxBoundary);
-      }
-
-      function buildPhysicalKeys(whiteCount, blackBoundaries){
-        const bSet=new Set(blackBoundaries);
-        const out=[]; let id=1;
-        for(let wi=1;wi<=whiteCount;wi++){
-          out.push({id:id++,black:false,whiteIndex:wi,boundaryIndex:null});
-          if(wi<whiteCount&&bSet.has(wi)){
-            out.push({id:id++,black:true,whiteIndex:null,boundaryIndex:wi});
-          }
-        }
-        return out;
       }
 
       function escapeHTML(s){
