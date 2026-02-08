@@ -1,316 +1,600 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>口笛→鍵盤ナビ（試作）</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>口笛ピアノナビ 21鍵</title>
   <style>
-    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 16px; }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-    button { padding: 10px 14px; font-size: 16px; }
-    .panel { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin-top: 12px; }
-    .big { font-size: 28px; font-weight: 700; }
-    .muted { color: #666; }
-    .kbd { user-select: none; margin-top: 10px; }
-    .keys { position: relative; height: 140px; width: min(980px, 100%); border: 1px solid #ccc; border-radius: 10px; overflow: hidden; background: #fafafa; }
-    .white { position: absolute; bottom: 0; height: 140px; border: 1px solid #bbb; background: white; border-radius: 0 0 6px 6px; }
-    .black { position: absolute; bottom: 60px; height: 80px; background: #222; border-radius: 0 0 6px 6px; }
-    .white.active { background: #dff1ff; }
-    .black.active { background: #2b7fff; }
-    .label { position: absolute; bottom: 6px; width: 100%; text-align: center; font-size: 12px; color: #333; }
-    .black .label { color: #eee; bottom: 4px; font-size: 11px; }
-    input[type="range"] { width: 260px; }
-    code { background: #f3f3f3; padding: 2px 6px; border-radius: 6px; }
+    :root{--bg:#f3f8fc;--card:#fff;--ink:#163042;--line:#c8d9e3;--ok:#27935d;--warn:#d68a2a;--bad:#c94b49}
+    *{box-sizing:border-box}body{margin:0;background:linear-gradient(150deg,#ecf6ff,#fff7eb);font-family:"Yu Gothic","Meiryo",sans-serif;color:var(--ink)}
+    .app{max-width:960px;margin:auto;padding:14px}.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:10px}
+    h1{margin:6px 0 4px;font-size:clamp(22px,5vw,34px)}.sub{margin:0;color:#607888;font-size:13px}
+    .status{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}.box{border:1px solid #d5e4ec;border-radius:10px;padding:7px;background:#ffffffb8}
+    .t{font-size:12px;color:#617988}.mic{display:flex;gap:8px;align-items:center;font-weight:700}.lamp{width:12px;height:12px;border-radius:50%;background:#adbfc8;border:1px solid #8fa3af}
+    .off{background:#ca5f53}.init{background:#dfa33f;animation:pulse 1s infinite}.on{background:#2ca468}
+    .vu{display:flex;gap:4px;align-items:flex-end;height:21px}.b{width:9px;border-radius:3px;background:#c8d4dc}.b:nth-child(1){height:8px}.b:nth-child(2){height:11px}.b:nth-child(3){height:14px}.b:nth-child(4){height:17px}.b:nth-child(5){height:20px}.b.a{background:#39a967}
+    .badge{display:inline-block;padding:3px 8px;border-radius:999px;border:1px solid #d1dde4;background:#f2f7fa;font-weight:700;font-size:13px}.s2{background:#fff0ef;border-color:#f0c7c4}.s3{background:#fff8ea;border-color:#edd5ac}.s4{background:#ecf9f1;border-color:#bfe2cb}
+    .result{min-height:105px;display:flex;flex-direction:column;justify-content:center;align-items:center;transition:.15s}.hide{opacity:0;pointer-events:none}
+    .unstable{opacity:.7;animation:blink .9s infinite}.key{font-size:clamp(36px,10vw,62px);font-weight:800;line-height:1}.label{font-size:clamp(28px,7vw,46px);font-weight:800;line-height:1.1}
+    .guide{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center}.dir{font-size:clamp(22px,6vw,42px);font-weight:800;text-align:center}
+    .ring{width:72px;height:72px;border-radius:50%;margin:auto;border:6px solid #c6d1d7}.r0{border-color:#c6d1d7}.r1{border-color:var(--bad);animation:blink .8s infinite}.r2{border-color:var(--warn);animation:pulse 1.1s infinite}.r3{border-color:var(--ok)}
+    .rt{font-size:12px;text-align:center;color:#5f7786}
+    .keys{position:relative;height:210px;border:1px solid #9cb4c3;border-radius:10px;overflow:hidden;background:linear-gradient(#fff,#edf5f9)}
+    .w,.k{position:absolute;user-select:none;border-bottom-left-radius:7px;border-bottom-right-radius:7px}.w{top:0;bottom:0;border:1px solid #9fb4c0;background:linear-gradient(#fff,#eef4f8)}.k{top:0;height:62%;border:1px solid #111b22;background:linear-gradient(#2f3840,#182026)}
+    .txt{position:absolute;left:0;right:0;bottom:6px;text-align:center;font-size:10px;font-weight:700;line-height:1.2}.k .txt{color:#ecf6ff;font-size:9px}
+    .st{box-shadow:0 0 0 2px #6ece96 inset;transform:translateY(-2px)}.cd{box-shadow:0 0 0 2px #efc87c inset;opacity:.8}.gh{box-shadow:0 0 0 2px #b5c8d4 inset;opacity:.58}.pb{box-shadow:0 0 0 2px #f0b15c inset,0 0 0 4px #ffedcc inset}
+    .msg{min-height:44px;display:flex;justify-content:center;align-items:center;font-weight:700;border:1px solid #ccdde6;border-radius:10px;background:#ffffffe0;margin-top:10px;padding:7px;text-align:center}
+    .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}button,select,input[type=range]{font-size:14px;border:1px solid #a7becb;border-radius:9px}
+    button{padding:7px 10px;background:#e8f3fb;font-weight:700}button:disabled{opacity:.5} .pri{background:#caf1dd}.warn{background:#fff3e5}
+    .small{font-size:12px;color:#607787}.hide2{display:none}
+    .target{font-size:clamp(19px,5vw,30px);text-align:center;font-weight:800}.prog{height:12px;background:#d8e6ee;border:1px solid #b9ccd7;border-radius:999px;overflow:hidden}.prog>div{height:100%;width:0;background:linear-gradient(90deg,#6bd09a,#43aa74)}
+    .wmsg{min-height:17px;color:#934216;font-size:13px;font-weight:700}
+    .hist{display:flex;gap:6px;overflow-x:auto;border:1px solid #cadbe4;border-radius:10px;min-height:62px;padding:8px;background:#f8fbfd}
+    .h{border:1px solid #b5cbd8;background:#eef7fd;border-radius:999px;padding:4px 9px;font-size:12px;font-weight:700;white-space:nowrap}.rest{background:#f6f0e6;border-color:#dac8a8}.act{background:#ffe9c6;border-color:#d69f4b}
+    pre{margin:0;white-space:pre-wrap;font-size:12px}
+    @keyframes blink{0%,48%{opacity:1}50%,100%{opacity:.58}}@keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.08)}100%{transform:scale(1)}}
+    @media (max-width:760px){.status{grid-template-columns:1fr}.guide{grid-template-columns:1fr}.keys{height:184px}}
   </style>
 </head>
 <body>
-  <h1>口笛→鍵盤ナビ（試作）🎹🫧</h1>
+  <div class="app">
+    <h1>口笛ピアノナビ 21鍵</h1>
+    <p class="sub">口笛の音程を検出し、今押すべき鍵盤位置を表示します（端末内処理）。</p>
 
-  <div class="row">
-    <button id="btnStart">マイク開始</button>
-    <button id="btnStop" disabled>停止</button>
+    <section class="panel status">
+      <div class="box"><div class="t">マイク</div><div class="mic"><span id="lamp" class="lamp off"></span><span id="micText">OFF</span></div></div>
+      <div class="box"><div class="t">入力レベル</div><div id="vu" class="vu"><span class="b"></span><span class="b"></span><span class="b"></span><span class="b"></span><span class="b"></span></div></div>
+      <div class="box"><div class="t">推定状態</div><span id="stateBadge" class="badge">未開始</span></div>
+    </section>
 
-    <div class="row">
-      <div>
-        <div class="muted">基準A4 (Hz) ※おもちゃピアノ補正用</div>
-        <input id="a4" type="range" min="415" max="466" step="1" value="440">
-        <span id="a4Val">440</span>
+    <section id="result" class="panel result hide"><div id="rk" class="key"></div><div id="rl" class="label"></div></section>
+    <section class="panel guide"><div id="dir" class="dir">−</div><div><div id="ring" class="ring r0"></div><div id="rt" class="rt">未検出</div></div></section>
+    <section class="panel"><div id="keys" class="keys"></div></section>
+    <section id="msg" class="msg">開始ボタンを押してください</section>
+
+    <section class="panel">
+      <div class="row">
+        <button id="start" class="pri">マイク開始</button>
+        <button id="stop" disabled>マイク停止</button>
+        <button id="tglCal">校正を開く</button>
+        <button id="tglSet">設定を開く</button>
       </div>
-    </div>
+    </section>
+
+    <section id="calPanel" class="panel hide2">
+      <h2>校正モード</h2>
+      <p class="small">各鍵盤を2.0秒計測。最後1.0秒の中央値を保存します。</p>
+      <div id="target" class="target">待機中</div>
+      <div class="prog"><div id="pg"></div></div>
+      <div id="sub" class="small">校正開始を押してください</div>
+      <div id="wmsg" class="wmsg"></div>
+      <div class="row"><button id="calStart" class="pri">全21鍵を校正</button><button id="calCancel" class="warn" disabled>中止</button></div>
+      <div id="calMeta" class="small"></div>
+    </section>
+
+    <section class="panel">
+      <h2>メロディ記録</h2>
+      <div class="row">
+        <button id="recStart" class="pri">記録開始</button>
+        <button id="recStop" disabled>記録停止</button>
+        <button id="playStart">再生ナビ</button>
+        <button id="playStop" class="warn" disabled>再生停止</button>
+      </div>
+      <div class="row">
+        <label class="small" for="mode">再生テンポ</label>
+        <select id="mode"><option value="recorded">記録時ベース</option><option value="fixed">固定テンポ</option></select>
+        <label class="small" for="bpm">BPM</label><input id="bpm" type="range" min="60" max="180" value="120"><span id="bpmText" class="small">120 BPM</span>
+      </div>
+      <div id="hist" class="hist"></div>
+    </section>
+
+    <section id="setPanel" class="panel hide2">
+      <h2>設定</h2>
+      <div class="row"><label for="sens">感度</label><select id="sens"><option value="low">低</option><option value="mid">中</option><option value="high">高</option></select></div>
+      <div class="row"><label for="dbg">デバッグ表示</label><input id="dbg" type="checkbox"></div>
+      <div class="row"><button id="exp">校正JSON出力</button><button id="imp">校正JSON入力</button><button id="reset" class="warn">校正削除</button></div>
+      <div id="storage" class="small"></div>
+    </section>
+
+    <section id="dbgPanel" class="panel hide2"><pre id="dbgText"></pre></section>
+    <input id="impFile" class="hide2" type="file" accept=".json,application/json">
   </div>
 
-  <div class="panel">
-    <div class="muted">推定結果</div>
-    <div class="big" id="noteText">—</div>
-    <div class="row">
-      <div>周波数: <code id="freqText">—</code> Hz</div>
-      <div>ズレ: <code id="centText">—</code> cent</div>
-      <div>信頼度: <code id="confText">—</code></div>
-    </div>
-    <div class="muted" style="margin-top:8px;">
-      コツ：口笛は「細く」「一定の強さ」「スマホ/PCから20〜40cm」くらいが安定しやすい。
-    </div>
-  </div>
+  <script>
+    (() => {
+      "use strict";
+      const INSTRUMENT = "KAWAI_toy_piano_21";
+      const MIN_HZ = 300, MAX_HZ = 2500, STABLE_FRAMES = 6, HOLD_MS = 1600;
+      const STATES = {S0:"S0",S1:"S1",S2:"S2",S3:"S3",S4:"S4"};
+      const SENS = {low:{conf:0.5,rms:0.02},mid:{conf:0.38,rms:0.015},high:{conf:0.28,rms:0.011}};
+      const KEYS = [
+        {id:1,label:"ド",black:false},{id:2,label:"ド♯",black:true},{id:3,label:"レ",black:false},{id:4,label:"レ♯",black:true},{id:5,label:"ミ",black:false},
+        {id:6,label:"ファ",black:false},{id:7,label:"ファ♯",black:true},{id:8,label:"ソ",black:false},{id:9,label:"ソ♯",black:true},{id:10,label:"ラ",black:false},
+        {id:11,label:"ラ♯",black:true},{id:12,label:"シ",black:false},{id:13,label:"ド",black:false},{id:14,label:"ド♯",black:true},{id:15,label:"レ",black:false},
+        {id:16,label:"レ♯",black:true},{id:17,label:"ミ",black:false},{id:18,label:"ファ",black:false},{id:19,label:"ファ♯",black:true},{id:20,label:"ソ",black:false},{id:21,label:"ラ",black:false}
+      ];
+      const KEY_MAP = new Map(KEYS.map(k=>[k.id,k]));
+      const E = {
+        lamp:gid("lamp"),micText:gid("micText"),vu:[...document.querySelectorAll("#vu .b")],stateBadge:gid("stateBadge"),
+        result:gid("result"),rk:gid("rk"),rl:gid("rl"),dir:gid("dir"),ring:gid("ring"),rt:gid("rt"),keys:gid("keys"),msg:gid("msg"),
+        start:gid("start"),stop:gid("stop"),tglCal:gid("tglCal"),tglSet:gid("tglSet"),calPanel:gid("calPanel"),setPanel:gid("setPanel"),
+        target:gid("target"),pg:gid("pg"),sub:gid("sub"),wmsg:gid("wmsg"),calMeta:gid("calMeta"),calStart:gid("calStart"),calCancel:gid("calCancel"),
+        recStart:gid("recStart"),recStop:gid("recStop"),playStart:gid("playStart"),playStop:gid("playStop"),hist:gid("hist"),
+        mode:gid("mode"),bpm:gid("bpm"),bpmText:gid("bpmText"),sens:gid("sens"),dbg:gid("dbg"),dbgPanel:gid("dbgPanel"),dbgText:gid("dbgText"),
+        exp:gid("exp"),imp:gid("imp"),reset:gid("reset"),storage:gid("storage"),impFile:gid("impFile")
+      };
+      let keyEls = new Map(), calOpen = false, setOpen = false;
+      let ctx=null, an=null, stream=null, raf=0, buf=null;
+      let state=STATES.S0, mic="off", reason="idle";
+      let pitch={freq:null,conf:0,rms:0,inRange:false}, ema=null, near=null, cand={id:null,label:"",frames:0}, ok={id:null,label:"",seen:0};
+      let cal=null, settings={sensitivity:"mid",debug:false,mode:"recorded",bpm:120};
+      let note={on:false,events:[],cur:null,start:0}, play={on:false,id:null,idx:-1,token:0}, cals={on:false,cancel:false};
+      let msgTmp="", msgUntil=0;
+      const store = createStore();
 
-  <div class="panel kbd">
-    <div class="muted">鍵盤表示（C4〜B5の2オクターブ）</div>
-    <div class="keys" id="keys"></div>
-  </div>
-
-<script>
-(() => {
-  // ====== 設定（ここを変えると表示鍵盤範囲を調整できる） ======
-  // 例: toy pianoがもっと低い/高いなら startMidi/endMidi を変える
-  const startMidi = 60; // C4
-  const endMidi   = 83; // B5（2オクターブ）
-  const noteNames = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
-
-  // ====== DOM ======
-  const btnStart = document.getElementById("btnStart");
-  const btnStop  = document.getElementById("btnStop");
-  const a4 = document.getElementById("a4");
-  const a4Val = document.getElementById("a4Val");
-  const noteText = document.getElementById("noteText");
-  const freqText = document.getElementById("freqText");
-  const centText = document.getElementById("centText");
-  const confText = document.getElementById("confText");
-  const keysEl = document.getElementById("keys");
-
-  a4.addEventListener("input", () => a4Val.textContent = a4.value);
-
-  // ====== 鍵盤描画 ======
-  // 白鍵の並びだけで等分し、黒鍵は上に重ねる簡易表示
-  const whitePattern = [0,2,4,5,7,9,11]; // C D E F G A B
-  const blackSet = new Set([1,3,6,8,10]); // C#,D#,F#,G#,A#
-
-  const midiToFreq = (m, A4=440) => A4 * Math.pow(2, (m - 69) / 12);
-  const midiToName = (m) => {
-    const name = noteNames[m % 12];
-    const oct = Math.floor(m / 12) - 1;
-    return `${name}${oct}`;
-  };
-
-  // 白鍵の数を数えて横幅割り当て
-  const whiteMidis = [];
-  for (let m = startMidi; m <= endMidi; m++) {
-    if (!blackSet.has(m % 12)) whiteMidis.push(m);
-  }
-  const whiteCount = whiteMidis.length;
-
-  const keyDivByMidi = new Map();
-
-  function renderKeys() {
-    keysEl.innerHTML = "";
-    const W = keysEl.clientWidth;
-    const whiteW = W / whiteCount;
-
-    // 白鍵
-    whiteMidis.forEach((m, i) => {
-      const d = document.createElement("div");
-      d.className = "white";
-      d.style.left = `${i * whiteW}px`;
-      d.style.width = `${whiteW}px`;
-      d.dataset.midi = m;
-
-      const lab = document.createElement("div");
-      lab.className = "label";
-      lab.textContent = midiToName(m);
-      d.appendChild(lab);
-
-      keysEl.appendChild(d);
-      keyDivByMidi.set(m, d);
-    });
-
-    // 黒鍵（白鍵の間に配置する簡易ロジック）
-    // 黒鍵は「C# は CとDの間」などなので、直前の白鍵indexを探して置く
-    for (let m = startMidi; m <= endMidi; m++) {
-      if (!blackSet.has(m % 12)) continue;
-
-      // この黒鍵の直前の白鍵m-1を見つける（例: C#ならC）
-      let prevWhite = m - 1;
-      while (prevWhite >= startMidi && blackSet.has(prevWhite % 12)) prevWhite--;
-      const prevIndex = whiteMidis.indexOf(prevWhite);
-      if (prevIndex < 0) continue;
-
-      const d = document.createElement("div");
-      d.className = "black";
-      const bw = whiteW * 0.62;
-      d.style.width = `${bw}px`;
-      d.style.left = `${(prevIndex + 1) * whiteW - bw/2}px`; // 間の真ん中
-      d.dataset.midi = m;
-
-      const lab = document.createElement("div");
-      lab.className = "label";
-      lab.textContent = midiToName(m);
-      d.appendChild(lab);
-
-      keysEl.appendChild(d);
-      keyDivByMidi.set(m, d);
-    }
-  }
-  renderKeys();
-  window.addEventListener("resize", renderKeys);
-
-  // ====== 音程推定（自己相関ベース） ======
-  let audioCtx, analyser, mediaStream;
-  let rafId = null;
-
-  function autoCorrelate(buf, sampleRate) {
-    // ざっくり信頼度つきピッチ推定
-    // 参考：自己相関。静音時はnull。
-    const SIZE = buf.length;
-    let rms = 0;
-    for (let i = 0; i < SIZE; i++) {
-      const v = buf[i];
-      rms += v * v;
-    }
-    rms = Math.sqrt(rms / SIZE);
-    if (rms < 0.012) return {freq: null, conf: 0}; // 小さすぎ
-
-    // DC除去（平均を引く）
-    let mean = 0;
-    for (let i = 0; i < SIZE; i++) mean += buf[i];
-    mean /= SIZE;
-    for (let i = 0; i < SIZE; i++) buf[i] -= mean;
-
-    // 自己相関
-    const maxLag = Math.floor(sampleRate / 50);   // 50Hzまで
-    const minLag = Math.floor(sampleRate / 2000); // 2000Hzまで
-    let bestLag = -1;
-    let bestCorr = 0;
-
-    for (let lag = minLag; lag <= maxLag; lag++) {
-      let corr = 0;
-      for (let i = 0; i < SIZE - lag; i++) {
-        corr += buf[i] * buf[i + lag];
+      async function init(){
+        renderKeys();
+        registerSW();
+        bind();
+        await store.init();
+        await loadSaved();
+        updateCalMeta();
+        renderHistory();
+        calOpen = !cal;
+        ui();
       }
-      if (corr > bestCorr) {
-        bestCorr = corr;
-        bestLag = lag;
+
+      function bind(){
+        E.start.addEventListener("click",()=>startMic().catch(e=>fail(e,"マイク開始失敗")));
+        E.stop.addEventListener("click",()=>stopMic().catch(e=>fail(e,"マイク停止失敗")));
+        E.tglCal.addEventListener("click",()=>{calOpen=!calOpen;ui();});
+        E.tglSet.addEventListener("click",()=>{setOpen=!setOpen;ui();});
+        E.calStart.addEventListener("click",()=>startCalibration().catch(e=>fail(e,"校正失敗")));
+        E.calCancel.addEventListener("click",()=>{cals.cancel=true;});
+        E.recStart.addEventListener("click",()=>startRec().catch(e=>fail(e,"記録開始失敗")));
+        E.recStop.addEventListener("click",()=>stopRec().catch(e=>fail(e,"記録停止失敗")));
+        E.playStart.addEventListener("click",()=>startPlay().catch(e=>fail(e,"再生失敗")));
+        E.playStop.addEventListener("click",()=>stopPlay());
+        E.mode.addEventListener("change",async()=>{settings.mode=E.mode.value==="fixed"?"fixed":"recorded";await saveSettings();ui();});
+        E.bpm.addEventListener("input",async()=>{settings.bpm=clamp(Math.round(Number(E.bpm.value)||120),60,180);E.bpmText.textContent=`${settings.bpm} BPM`;await saveSettings();ui();});
+        E.sens.addEventListener("change",async()=>{settings.sensitivity=SENS[E.sens.value]?E.sens.value:"mid";await saveSettings();ui();});
+        E.dbg.addEventListener("change",async()=>{settings.debug=!!E.dbg.checked;await saveSettings();ui();});
+        E.exp.addEventListener("click",()=>exportCal());
+        E.imp.addEventListener("click",()=>E.impFile.click());
+        E.reset.addEventListener("click",()=>resetCal().catch(e=>fail(e,"校正削除失敗")));
+        E.impFile.addEventListener("change",()=>importCalFile().catch(e=>fail(e,"JSON入力失敗")));
       }
-    }
 
-    // 信頼度っぽい値（rmsと相関）
-    const conf = Math.min(1, bestCorr / (SIZE * 0.12));
+      async function startMic(){
+        if(mic==="on"||mic==="init") return;
+        mic="init"; state=STATES.S1; ui();
+        try{
+          stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+          ctx=new (window.AudioContext||window.webkitAudioContext)();
+          const src=ctx.createMediaStreamSource(stream);
+          an=ctx.createAnalyser(); an.fftSize=2048; an.smoothingTimeConstant=0;
+          src.connect(an); buf=new Float32Array(an.fftSize);
+          mic="on"; state=STATES.S2; reason=cal?"quiet":"needCal";
+          tick();
+        }catch(err){
+          mic="error"; state=STATES.S0; flash(`マイクエラー: ${err&&err.message?err.message:"不明"}`,3800);
+        }
+        ui();
+      }
 
-    if (bestLag <= 0 || conf < 0.12) return {freq: null, conf};
+      async function stopMic(){
+        cancelAnimationFrame(raf); raf=0;
+        if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+        if(ctx){await ctx.close();ctx=null;}
+        an=null; buf=null;
+        pitch={freq:null,conf:0,rms:0,inRange:false}; ema=null; near=null; cand={id:null,label:"",frames:0};
+        mic="off"; state=STATES.S0; reason="idle"; ui();
+      }
 
-    const freq = sampleRate / bestLag;
-    return {freq, conf};
-  }
+      async function ensureMic(){ if(mic==="on") return true; await startMic(); return mic==="on"; }
 
-  function freqToMidi(f, A4=440) {
-    return 69 + 12 * Math.log2(f / A4);
-  }
-  function centsOffFromMidi(f, midi, A4=440) {
-    const ref = midiToFreq(midi, A4);
-    return 1200 * Math.log2(f / ref);
-  }
-  function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
+      function tick(){
+        if(!an||!ctx||mic!=="on") return;
+        an.getFloatTimeDomainData(buf);
+        pitch=detectPitch(buf,ctx.sampleRate,profile().rms);
+        applyPitch(pitch);
+        stepRec();
+        ui();
+        raf=requestAnimationFrame(tick);
+      }
 
-  // 平滑化（フラつき抑制）
-  let smoothFreq = null;
-  function smooth(newF) {
-    const alpha = 0.22; // 0に近いほどヌルヌル、1に近いほど即応
-    if (smoothFreq == null) smoothFreq = newF;
-    smoothFreq = smoothFreq * (1 - alpha) + newF * alpha;
-    return smoothFreq;
-  }
+      function detectPitch(a,sr,rmsFloor){
+        let rms=0,mean=0,n=a.length;
+        for(let i=0;i<n;i++){const v=a[i];rms+=v*v;mean+=v;}
+        rms=Math.sqrt(rms/n); mean/=n;
+        if(rms<rmsFloor*0.5) return {freq:null,conf:0,rms,inRange:false};
+        for(let i=0;i<n;i++) a[i]-=mean;
+        const minLag=Math.floor(sr/MAX_HZ), maxLag=Math.floor(sr/MIN_HZ);
+        let bestLag=-1,best=-1;
+        for(let lag=minLag;lag<=maxLag;lag++){
+          let num=0,da=0,db=0,lim=n-lag;
+          for(let i=0;i<lim;i++){const x=a[i],y=a[i+lag];num+=x*y;da+=x*x;db+=y*y;}
+          const c=num/(Math.sqrt(da*db)+1e-12); if(c>best){best=c;bestLag=lag;}
+        }
+        const conf=clamp((best-0.2)/0.75,0,1);
+        if(bestLag<=0||best<0.24) return {freq:null,conf,rms,inRange:false};
+        const f=sr/bestLag; return {freq:f,conf,rms,inRange:f>=MIN_HZ&&f<=MAX_HZ};
+      }
 
-  function clearActive() {
-    for (const d of keyDivByMidi.values()) d.classList.remove("active");
-  }
+      function applyPitch(p){
+        if(mic!=="on") return;
+        const pr=profile(), enough=p.rms>=pr.rms, valid=!!p.freq&&p.inRange&&p.conf>=pr.conf;
+        if(!valid){
+          near=null; cand.id=null; cand.frames=0; cand.label="";
+          if(!cal) reason="needCal"; else if(!enough) reason="quiet"; else if(!p.freq) reason="unvoiced"; else if(!p.inRange) reason="out"; else reason="lowConf";
+          state=STATES.S2; if(!enough) ema=null; return;
+        }
+        if(!cal){state=STATES.S2; reason="needCal"; return;}
+        ema=ema==null?p.freq:ema*0.68+p.freq*0.32;
+        near=nearest(ema,cal.keys); if(!near){state=STATES.S2;reason="unvoiced";return;}
+        if(cand.id===near.id)cand.frames++; else {cand.id=near.id;cand.label=near.label;cand.frames=1;}
+        if(cand.frames>=STABLE_FRAMES){ok.id=near.id;ok.label=near.label;ok.seen=performance.now();state=STATES.S4;reason="ok";}
+        else {state=STATES.S3;reason="warm";}
+      }
 
-  function setActive(midi) {
-    clearActive();
-    const d = keyDivByMidi.get(midi);
-    if (d) d.classList.add("active");
-  }
+      function nearest(freq,table){
+        if(!Array.isArray(table)||!table.length) return null;
+        let best=null;
+        for(const k of table){
+          const cents=1200*Math.log2(freq/k.freq_hz), abs=Math.abs(cents);
+          if(!best||abs<best.abs) best={id:k.id,label:k.label,cents,abs};
+        }
+        return best;
+      }
 
-  function loop() {
-    const A4 = Number(a4.value);
-    const buf = new Float32Array(analyser.fftSize);
-    analyser.getFloatTimeDomainData(buf);
+      function renderKeys(){
+        E.keys.innerHTML=""; keyEls=new Map();
+        const ws=KEYS.filter(k=>!k.black), wc=ws.length, ww=100/wc, wi=new Map(ws.map((k,i)=>[k.id,i]));
+        for(const k of ws){
+          const i=wi.get(k.id), d=document.createElement("div");
+          d.className="w"; d.style.left=`${(i*ww).toFixed(4)}%`; d.style.width=`${ww.toFixed(4)}%`; d.dataset.id=String(k.id);
+          d.innerHTML=`<div class="txt">${k.id}<br>${k.label}</div>`; E.keys.appendChild(d); keyEls.set(k.id,d);
+        }
+        const bw=ww*0.62;
+        for(let idx=0;idx<KEYS.length;idx++){
+          const k=KEYS[idx]; if(!k.black) continue;
+          let prev=null; for(let i=idx-1;i>=0;i--) if(!KEYS[i].black){prev=KEYS[i].id;break;}
+          if(!prev) continue;
+          const left=(wi.get(prev)+1)*ww-bw/2, d=document.createElement("div");
+          d.className="k"; d.style.left=`${left.toFixed(4)}%`; d.style.width=`${bw.toFixed(4)}%`; d.dataset.id=String(k.id);
+          d.innerHTML=`<div class="txt">${k.id}<br>${k.label}</div>`; E.keys.appendChild(d); keyEls.set(k.id,d);
+        }
+      }
 
-    const {freq, conf} = autoCorrelate(buf, audioCtx.sampleRate);
+      function ui(){
+        uiPanels(); uiButtons(); uiStatus(); uiResult(); uiGuide(); uiKeys(); uiMessage(); uiDebug();
+      }
 
-    if (!freq) {
-      noteText.textContent = "—";
-      freqText.textContent = "—";
-      centText.textContent = "—";
-      confText.textContent = conf.toFixed(2);
-      clearActive();
-      rafId = requestAnimationFrame(loop);
-      return;
-    }
+      function uiPanels(){
+        E.calPanel.classList.toggle("hide2",!calOpen); E.setPanel.classList.toggle("hide2",!setOpen);
+        E.tglCal.textContent=calOpen?"校正を閉じる":"校正を開く"; E.tglSet.textContent=setOpen?"設定を閉じる":"設定を開く";
+      }
 
-    const f = smooth(freq);
-    const midiFloat = freqToMidi(f, A4);
-    const midiNearest = Math.round(midiFloat);
+      function uiButtons(){
+        const busy=cals.on;
+        E.start.disabled=mic==="on"||mic==="init"; E.stop.disabled=mic!=="on";
+        E.calStart.disabled=busy; E.calCancel.disabled=!busy;
+        E.recStart.disabled=note.on||busy||play.on||!cal; E.recStop.disabled=!note.on;
+        E.playStart.disabled=play.on||busy||note.on||note.events.length===0; E.playStop.disabled=!play.on;
+        E.bpm.disabled=settings.mode!=="fixed"; E.mode.disabled=busy;
+      }
 
-    // 表示範囲に収める（範囲外は端を光らせる）
-    const midiClamped = clamp(midiNearest, startMidi, endMidi);
+      function uiStatus(){
+        E.lamp.className="lamp";
+        if(mic==="on"){E.lamp.classList.add("on");E.micText.textContent="ON";}
+        else if(mic==="init"){E.lamp.classList.add("init");E.micText.textContent="初期化中";}
+        else if(mic==="error"){E.lamp.classList.add("off");E.micText.textContent="エラー";}
+        else {E.lamp.classList.add("off");E.micText.textContent="OFF";}
+        const lvl=clamp(Math.round(pitch.rms*130),0,5); E.vu.forEach((x,i)=>x.classList.toggle("a",i<lvl));
+        E.stateBadge.className="badge";
+        if(state===STATES.S2){E.stateBadge.classList.add("s2");E.stateBadge.textContent="未検出";}
+        else if(state===STATES.S3){E.stateBadge.classList.add("s3");E.stateBadge.textContent="不安定";}
+        else if(state===STATES.S4){E.stateBadge.classList.add("s4");E.stateBadge.textContent="安定";}
+        else if(state===STATES.S1) E.stateBadge.textContent="検出中";
+        else E.stateBadge.textContent="未開始";
+      }
 
-    const cents = centsOffFromMidi(f, midiNearest, A4);
+      function uiResult(){
+        if(state===STATES.S4&&ok.id){E.result.classList.remove("hide","unstable");E.rk.textContent=`Key ${ok.id}`;E.rl.textContent=ok.label;return;}
+        if(state===STATES.S3&&near){E.result.classList.remove("hide");E.result.classList.add("unstable");E.rk.textContent=`Key ${near.id}`;E.rl.textContent=near.label;return;}
+        E.result.classList.add("hide");E.result.classList.remove("unstable");
+      }
 
-    noteText.textContent = midiToName(midiNearest);
-    freqText.textContent = f.toFixed(1);
-    centText.textContent = (cents >= 0 ? "+" : "") + cents.toFixed(0);
-    confText.textContent = conf.toFixed(2);
+      function uiGuide(){
+        let d="−"; if((state===STATES.S3||state===STATES.S4)&&near){d=Math.abs(near.cents)<=12?"OK":(near.cents<0?"←低い":"高い→");}
+        E.dir.textContent=d; E.ring.className="ring r0";
+        if(state===STATES.S4){E.ring.classList.add("r3");E.rt.textContent="安定";}
+        else if(state===STATES.S3){if(cand.frames>=STABLE_FRAMES-2){E.ring.classList.add("r2");E.rt.textContent="ほぼOK";}else{E.ring.classList.add("r1");E.rt.textContent="不安定";}}
+        else if(state===STATES.S2){E.ring.classList.add("r1");E.rt.textContent="不安定";}
+        else E.rt.textContent="未検出";
+      }
 
-    setActive(midiClamped);
+      function uiKeys(){
+        keyEls.forEach(d=>d.classList.remove("st","cd","gh","pb"));
+        const ghost=ghostId(); if(ghost&&keyEls.has(ghost)) keyEls.get(ghost).classList.add("gh");
+        if(state===STATES.S3&&near&&keyEls.has(near.id)) keyEls.get(near.id).classList.add("cd");
+        if(state===STATES.S4&&ok.id&&keyEls.has(ok.id)) keyEls.get(ok.id).classList.add("st");
+        if(play.on&&play.id&&keyEls.has(play.id)) keyEls.get(play.id).classList.add("pb");
+      }
 
-    rafId = requestAnimationFrame(loop);
-  }
+      function uiMessage(){
+        if(Date.now()<msgUntil){E.msg.textContent=msgTmp;return;}
+        if(cals.on){E.msg.textContent="校正中: 指示された鍵盤を鳴らしてください";return;}
+        if(play.on){E.msg.textContent="再生ナビ中";return;}
+        if(state===STATES.S0){E.msg.textContent="開始ボタンを押してください";return;}
+        if(state===STATES.S1){E.msg.textContent="マイク許可を待っています";return;}
+        if(state===STATES.S2){
+          if(!cal||reason==="needCal"){E.msg.textContent="まず校正を完了してください";return;}
+          if(reason==="quiet"){E.msg.textContent="音が小さいです";return;}
+          if(reason==="out"){E.msg.textContent="300〜2500Hzの範囲で吹いてください";return;}
+          if(reason==="lowConf"||reason==="unvoiced"){E.msg.textContent="音を一定に";return;}
+          E.msg.textContent="口笛を吹いてください";return;
+        }
+        E.msg.textContent=state===STATES.S4?"OK":"音を一定に";
+      }
 
-  async function start() {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const src = audioCtx.createMediaStreamSource(mediaStream);
+      function uiDebug(){
+        E.dbgPanel.classList.toggle("hide2",!settings.debug);
+        if(!settings.debug) return;
+        E.dbgText.textContent=[
+          `state: ${state}`,`mic: ${mic}`,`reason: ${reason}`,
+          `f0_hz(raw): ${pitch.freq?pitch.freq.toFixed(2):"-"}`,`f0_hz(ema): ${ema?ema.toFixed(2):"-"}`,
+          `confidence: ${pitch.conf.toFixed(3)}`,`rms: ${pitch.rms.toFixed(4)}`,
+          `candidate: ${cand.id?`Key ${cand.id} (${cand.frames}/${STABLE_FRAMES})`:"-"}`,
+          `confirmed: ${ok.id?`Key ${ok.id}`:"-"}`,`calibrated: ${cal?"yes":"no"}`,
+          `recording: ${note.on?"on":"off"} events=${note.events.length}`,`playback: ${play.on?"on":"off"}`
+        ].join("\n");
+      }
 
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 2048;
-    analyser.smoothingTimeConstant = 0.0;
+      function profile(){ return SENS[settings.sensitivity]||SENS.mid; }
+      function ghostId(){ return ok.id && performance.now()-ok.seen<=HOLD_MS ? ok.id : null; }
 
-    src.connect(analyser);
+      async function loadSaved(){
+        const ss=await store.get("settings");
+        if(ss&&typeof ss==="object"){
+          settings.sensitivity=SENS[ss.sensitivity]?ss.sensitivity:"mid";
+          settings.debug=!!ss.debug; settings.mode=ss.mode==="fixed"?"fixed":"recorded";
+          settings.bpm=clamp(Number(ss.bpm)||120,60,180);
+        }
+        const sc=await store.get("calibration");
+        if(sc){const v=validateCal(sc); if(v.ok) cal=v.data;}
+        const sm=await store.get("melody");
+        if(Array.isArray(sm)) note.events=sanitizeEvents(sm);
+        E.sens.value=settings.sensitivity; E.dbg.checked=settings.debug; E.mode.value=settings.mode;
+        E.bpm.value=String(settings.bpm); E.bpmText.textContent=`${settings.bpm} BPM`;
+      }
 
-    btnStart.disabled = true;
-    btnStop.disabled = false;
+      async function saveSettings(){ await store.set("settings",settings); }
 
-    smoothFreq = null;
-    rafId = requestAnimationFrame(loop);
-  }
+      async function startCalibration(){
+        if(cals.on) return;
+        const ready=await ensureMic(); if(!ready) return;
+        if(play.on) stopPlay(); if(note.on) await stopRec();
+        calOpen=true; cals.on=true; cals.cancel=false;
+        E.wmsg.textContent=""; E.sub.textContent="計測を開始します"; E.pg.style.width="0%"; ui();
+        const rows=[];
+        for(let i=0;i<KEYS.length;i++){
+          if(cals.cancel) break;
+          const k=KEYS[i]; let done=false;
+          while(!done&&!cals.cancel){
+            E.target.textContent=`Key ${k.id}（${k.label}）を鳴らしてください`;
+            const cap=await calStep(i);
+            if(cap.cancelled) break;
+            if(!cap.ok){E.wmsg.textContent="音が小さいか不安定です。同じ鍵盤をもう一度。"; await sleep(220); continue;}
+            rows.push({id:k.id,label:k.label,freq_hz:Number(cap.median.toFixed(3))});
+            E.wmsg.textContent=cap.warn||""; done=true; await sleep(120);
+          }
+        }
+        cals.on=false; E.calCancel.disabled=true;
+        if(!cals.cancel&&rows.length===KEYS.length){
+          cal={instrument:INSTRUMENT,created_at:new Date().toISOString(),keys:rows};
+          await store.set("calibration",cal); updateCalMeta(); flash("校正データを保存しました",2400);
+        }else if(cals.cancel) flash("校正を中止しました",1800);
+        reason=cal?"quiet":"needCal"; ui();
+      }
 
-  async function stop() {
-    if (rafId) cancelAnimationFrame(rafId);
-    rafId = null;
-    clearActive();
+      function calStep(iKey){
+        const dur=2000, tail=1000, t0=performance.now(), s=[];
+        return new Promise(resolve=>{
+          const go=()=>{
+            if(!cals.on||cals.cancel){resolve({cancelled:true});return;}
+            const e=performance.now()-t0, r=clamp(e/dur,0,1), all=(iKey+r)/KEYS.length;
+            E.pg.style.width=`${(all*100).toFixed(1)}%`; E.sub.textContent=`計測中: 残り ${Math.max(0,(dur-e)/1000).toFixed(1)} 秒`;
+            if(pitch.freq&&pitch.inRange&&pitch.conf>=0.18) s.push({t:e,f:pitch.freq,rms:pitch.rms});
+            if(e<dur){requestAnimationFrame(go);return;}
+            const t=s.filter(x=>x.t>=tail).map(x=>x.f); if(t.length<10){resolve({ok:false});return;}
+            const m=median(t), spread=median(t.map(v=>Math.abs(v-m)))/Math.max(1e-6,m), a=avg(s.map(x=>x.rms));
+            if(a<profile().rms*1.05){resolve({ok:false});return;}
+            resolve({ok:true,median:m,warn:spread>0.012?"揺れがやや大きい状態で保存しました。":""});
+          };
+          go();
+        });
+      }
 
-    if (mediaStream) {
-      mediaStream.getTracks().forEach(t => t.stop());
-      mediaStream = null;
-    }
-    if (audioCtx) {
-      await audioCtx.close();
-      audioCtx = null;
-    }
+      async function startRec(){
+        if(note.on) return;
+        if(!cal){calOpen=true;flash("記録前に校正を完了してください",2200);ui();return;}
+        const ready=await ensureMic(); if(!ready) return;
+        if(play.on) stopPlay();
+        note.on=true; note.events=[]; note.cur=null; note.start=performance.now();
+        openSeg(recToken(),note.start); renderHistory(); ui();
+      }
 
-    btnStart.disabled = false;
-    btnStop.disabled = true;
+      async function stopRec(){
+        if(!note.on) return;
+        closeSeg(performance.now()); note.on=false; note.cur=null;
+        await store.set("melody",note.events); renderHistory(); ui();
+      }
 
-    noteText.textContent = "—";
-    freqText.textContent = "—";
-    centText.textContent = "—";
-    confText.textContent = "—";
-  }
+      function stepRec(){
+        if(!note.on) return;
+        const now=performance.now(), tk=recToken();
+        if(!note.cur){openSeg(tk,now);return;}
+        if(segToken(note.cur)!==tk){closeSeg(now);openSeg(tk,now);}
+      }
 
-  btnStart.addEventListener("click", () => start().catch(err => {
-    alert("マイク開始に失敗: " + err.message);
-    console.error(err);
-  }));
-  btnStop.addEventListener("click", () => stop());
+      function recToken(){ return state===STATES.S4&&ok.id?`key:${ok.id}`:"rest"; }
 
-})();
-</script>
+      function openSeg(token,at){
+        if(token==="rest"){note.cur={type:"rest",startAt:at};return;}
+        const id=Number(token.split(":")[1]), k=KEY_MAP.get(id);
+        note.cur={type:"key",keyId:id,label:k?k.label:"",startAt:at};
+      }
+
+      function closeSeg(at){
+        if(!note.cur) return;
+        const d=Math.max(40,at-note.cur.startAt), st=Math.max(0,note.cur.startAt-note.start);
+        const o={type:note.cur.type,start_ms:Math.round(st),duration_ms:Math.round(d)};
+        if(note.cur.type==="key"){o.keyId=note.cur.keyId;o.label=note.cur.label;}
+        note.events.push(o); note.cur=null; renderHistory();
+      }
+
+      function segToken(seg){ return seg.type==="rest"?"rest":`key:${seg.keyId}`; }
+
+      async function startPlay(){
+        if(play.on) return;
+        if(note.on) await stopRec();
+        if(!note.events.length){flash("再生する履歴がありません",1800);return;}
+        play.on=true; play.token++; const tk=play.token; ui();
+        for(let i=0;i<note.events.length;i++){
+          if(!play.on||play.token!==tk) break;
+          const ev=note.events[i]; play.idx=i; play.id=ev.type==="key"?ev.keyId:null;
+          renderHistory(); ui();
+          const d=settings.mode==="recorded"?Math.max(120,Number(ev.duration_ms)||120):Math.max(120,Math.round(60000/settings.bpm));
+          await sleep(d);
+        }
+        if(play.token===tk) stopPlay();
+      }
+
+      function stopPlay(){ play.on=false; play.id=null; play.idx=-1; renderHistory(); ui(); }
+
+      function renderHistory(){
+        E.hist.innerHTML="";
+        const arr=note.on&&note.cur?[...note.events,previewSeg()]:note.events.slice();
+        if(!arr.length){const d=document.createElement("div");d.className="small";d.textContent="まだ記録はありません";E.hist.appendChild(d);return;}
+        arr.forEach((ev,i)=>{
+          const d=document.createElement("div");
+          d.className=`h${ev.type==="rest"?" rest":""}${play.on&&i===play.idx?" act":""}`;
+          d.style.minWidth=`${clamp(Math.round((ev.duration_ms||120)/8),52,220)}px`;
+          d.textContent=ev.type==="rest"?"休符":`Key ${ev.keyId} ${ev.label}`;
+          E.hist.appendChild(d);
+        });
+      }
+
+      function previewSeg(){
+        if(!note.cur) return null;
+        const d=Math.max(40,performance.now()-note.cur.startAt);
+        if(note.cur.type==="rest") return {type:"rest",duration_ms:d};
+        return {type:"key",keyId:note.cur.keyId,label:note.cur.label,duration_ms:d};
+      }
+
+      function updateCalMeta(){
+        if(!cal){E.calMeta.textContent="校正データ: 未保存";return;}
+        const dt=new Date(cal.created_at), f1=cal.keys[0].freq_hz.toFixed(1), f2=cal.keys[cal.keys.length-1].freq_hz.toFixed(1);
+        E.calMeta.textContent=`校正データ: ${dt.toLocaleString("ja-JP")} / ${cal.keys.length}鍵 / ${f1}Hz〜${f2}Hz`;
+      }
+
+      async function resetCal(){
+        if(!window.confirm("校正データを削除しますか？")) return;
+        cal=null; await store.remove("calibration"); updateCalMeta(); calOpen=true; flash("校正データを削除しました",2000); ui();
+      }
+
+      function exportCal(){
+        if(!cal){flash("エクスポートする校正データがありません",1800);return;}
+        const b=new Blob([JSON.stringify(cal,null,2)],{type:"application/json"}), u=URL.createObjectURL(b), a=document.createElement("a");
+        a.href=u; a.download=`calibration_${cal.created_at.slice(0,10)}.json`; a.click(); setTimeout(()=>URL.revokeObjectURL(u),1000);
+      }
+
+      async function importCalFile(){
+        const f=E.impFile.files&&E.impFile.files[0]; if(!f) return;
+        let p; try{p=JSON.parse(await f.text());}catch(_){flash("JSON形式が不正です",2200);E.impFile.value="";return;}
+        const v=validateCal(p); if(!v.ok){flash(`インポート失敗: ${v.err}`,2600);E.impFile.value="";return;}
+        cal=v.data; await store.set("calibration",cal); updateCalMeta(); calOpen=false; flash("校正データをインポートしました",2300); E.impFile.value=""; ui();
+      }
+
+      function validateCal(raw){
+        if(!raw||typeof raw!=="object") return {ok:false,err:"JSONオブジェクトではありません"};
+        if(raw.instrument!==INSTRUMENT) return {ok:false,err:"instrument が一致しません"};
+        if(!Array.isArray(raw.keys)||raw.keys.length!==KEYS.length) return {ok:false,err:"keys は21件必要です"};
+        const m=new Map(raw.keys.map(x=>[Number(x.id),x])), n=[];
+        for(const b of KEYS){
+          const it=m.get(b.id); if(!it) return {ok:false,err:`Key ${b.id} がありません`};
+          if(String(it.label)!==b.label) return {ok:false,err:`Key ${b.id} のlabelが不正です`};
+          const hz=Number(it.freq_hz); if(!Number.isFinite(hz)||hz<=0) return {ok:false,err:`Key ${b.id} のfreq_hzが不正です`};
+          n.push({id:b.id,label:b.label,freq_hz:Number(hz.toFixed(3))});
+        }
+        return {ok:true,data:{instrument:INSTRUMENT,created_at:typeof raw.created_at==="string"?raw.created_at:new Date().toISOString(),keys:n}};
+      }
+
+      function sanitizeEvents(arr){
+        return arr.map(e=>{
+          if(e.type==="rest") return {type:"rest",start_ms:Math.max(0,Number(e.start_ms)||0),duration_ms:Math.max(40,Number(e.duration_ms)||120)};
+          const id=Number(e.keyId); if(!KEY_MAP.has(id)) return null;
+          return {type:"key",keyId:id,label:KEY_MAP.get(id).label,start_ms:Math.max(0,Number(e.start_ms)||0),duration_ms:Math.max(40,Number(e.duration_ms)||120)};
+        }).filter(Boolean);
+      }
+
+      function registerSW(){
+        if(!("serviceWorker" in navigator)) return;
+        const code=[
+          "const CACHE='whistle-piano-v1';",
+          "self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['./','index.html']).catch(()=>{})));self.skipWaiting();});",
+          "self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));",
+          "self.addEventListener('fetch',e=>{const u=new URL(e.request.url);if(e.request.method!=='GET')return;",
+          "if(u.origin!==location.origin)return;",
+          "e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).then(res=>{const cp=res.clone();caches.open(CACHE).then(c=>c.put(e.request,cp));return res;}).catch(()=>caches.match('./'))));});"
+        ].join('');
+        const blob=new Blob([code],{type:"text/javascript"});
+        const url=URL.createObjectURL(blob);
+        navigator.serviceWorker.register(url).catch(()=>{});
+      }
+
+      function flash(t,d=2200){msgTmp=t;msgUntil=Date.now()+d;}
+      function fail(err,p){console.error(err);flash(`${p}: ${err&&err.message?err.message:"不明なエラー"}`,3200);ui();}
+      function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+      function median(a){if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y),m=Math.floor(s.length/2);return s.length%2===0?(s[m-1]+s[m])/2:s[m];}
+      function avg(a){if(!a.length)return 0;let t=0;for(const v of a)t+=v;return t/a.length;}
+      function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
+
+      function createStore(){
+        const dbName="whistle-piano-db", sn="kv", pref="whistle-piano:"; let dbp=null, mode="localStorage";
+        async function init(){
+          if(!("indexedDB" in window)){mode="localStorage";E.storage.textContent="保存先: localStorage";return;}
+          dbp=new Promise((res,rej)=>{
+            const r=indexedDB.open(dbName,1);
+            r.onupgradeneeded=()=>{const db=r.result;if(!db.objectStoreNames.contains(sn))db.createObjectStore(sn,{keyPath:"id"});};
+            r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+          });
+          try{await dbp;mode="IndexedDB";}catch(_){mode="localStorage";dbp=null;}
+          E.storage.textContent=`保存先: ${mode}`;
+        }
+        async function get(k){
+          if(dbp){try{const db=await dbp,v=await idbGet(db,sn,k); if(v!==undefined)return v;}catch(_){dbp=null;}}
+          const r=localStorage.getItem(pref+k); if(!r)return null; try{return JSON.parse(r);}catch(_){return null;}
+        }
+        async function set(k,v){
+          if(dbp){try{const db=await dbp;await idbSet(db,sn,k,v);}catch(_){dbp=null;}}
+          localStorage.setItem(pref+k,JSON.stringify(v));
+        }
+        async function remove(k){
+          if(dbp){try{const db=await dbp;await idbDel(db,sn,k);}catch(_){dbp=null;}}
+          localStorage.removeItem(pref+k);
+        }
+        return {init,get,set,remove};
+      }
+
+      function idbGet(db,sn,k){return new Promise((res,rej)=>{const tx=db.transaction(sn,"readonly"),st=tx.objectStore(sn),r=st.get(k);r.onsuccess=()=>res(r.result?r.result.value:undefined);r.onerror=()=>rej(r.error);});}
+      function idbSet(db,sn,k,v){return new Promise((res,rej)=>{const tx=db.transaction(sn,"readwrite"),st=tx.objectStore(sn);st.put({id:k,value:v});tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
+      function idbDel(db,sn,k){return new Promise((res,rej)=>{const tx=db.transaction(sn,"readwrite"),st=tx.objectStore(sn);st.delete(k);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
+
+      init();
+      function gid(id){return document.getElementById(id);}
+    })();
+  </script>
 </body>
 </html>
