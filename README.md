@@ -1,14 +1,14 @@
 # whistle-piano
 
-21鍵（白13 / 黒8）向けの「口笛鍵盤ナビ」Webアプリです。  
+実機写真レイアウト（白14 / 黒10 / 合計24鍵）向けの「口笛鍵盤ナビ」Webアプリです。  
 `index.html` 1ファイルに HTML/CSS/JavaScript を内包し、GitHub Pages で公開できます。
 
 ## 機能
 
 - 口笛のリアルタイム音程推定（300Hz〜2500Hz）
-- 3点固定校正（Key 1 / Key 11 / Key 21）
+- 3点固定校正（Key 1 / Key 13 / Key 24）
 - 校正式: `p = log2(freq)`, `p_corrected = α * p + β`（最小二乗）
-- 補正済み全鍵テーブル（21鍵）を生成し、通常運転はそのテーブルのみ使用
+- 補正済み全鍵テーブル（24鍵）を生成し、通常運転はそのテーブルのみ使用
 - Key IDは左→右の物理順（白黒共通連番）
 - Key番号主表示 + ドレミ任意編集
 - 安定化（EMA平滑化 + 6フレーム連続確定 + 直前Key保持）
@@ -29,7 +29,7 @@
 ## 使い方（校正 → 演奏 → 記録）
 
 1. `マイク開始` を押す
-2. `校正を開く` → `3点校正 (Key 1 / Key 11 / Key 21)`
+2. `校正を開く` → `3点校正 (Key 1 / Key 13 / Key 24)`
 3. 指示された3鍵を順に鳴らす（各2.0秒、末尾1.0秒中央値）
 4. 校正完了後、口笛を吹いて鍵盤ナビを確認
 5. `記録開始` で履歴を作り、`再生ナビ` で順次ハイライト再生
@@ -38,10 +38,10 @@
 
 ```json
 {
-  "instrument": "KAWAI_toy_piano_21_three_point",
+  "instrument": "KAWAI_toy_piano_photo_layout_24",
   "calibration_mode": "three_point_fixed",
   "key_id_rule": "left_to_right_physical_order",
-  "base_key_ids": [1, 11, 21],
+  "base_key_ids": [1, 13, 24],
   "alpha": 1.0,
   "beta": 0.0,
   "anchors": [

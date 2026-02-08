@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>口笛ピアノナビ 21鍵</title>
+  <title>口笛ピアノナビ 実機配列 24鍵</title>
   <style>
     :root{--bg:#f3f8fc;--card:#fff;--ink:#163042;--line:#c8d9e3;--ok:#27935d;--warn:#d68a2a;--bad:#c94b49}
     *{box-sizing:border-box}body{margin:0;background:linear-gradient(150deg,#ecf6ff,#fff7eb);font-family:"Yu Gothic","Meiryo",sans-serif;color:var(--ink)}
@@ -42,8 +42,8 @@
 </head>
 <body>
   <div class="app">
-    <h1>口笛ピアノナビ 21鍵</h1>
-    <p class="sub">口笛の音程を検出し、今押すべき鍵盤位置を表示します（端末内処理）。Key ID採番ルール: 左→右の物理順（白黒共通連番）。</p>
+    <h1>口笛ピアノナビ 実機配列</h1>
+    <p class="sub">口笛の音程を検出し、今押すべき鍵盤位置を表示します（端末内処理）。Key ID採番ルール: 左→右の物理順（白黒共通連番）。3点校正: Key 1 / Key 13 / Key 24。</p>
 
     <section class="panel status">
       <div class="box"><div class="t">マイク</div><div class="mic"><span id="lamp" class="lamp off"></span><span id="micText">OFF</span></div></div>
@@ -67,7 +67,7 @@
 
     <section id="calPanel" class="panel hide2">
       <h2>校正モード</h2>
-      <p class="small">3点固定校正: Key 1 / Key 11 / Key 21 を各2.0秒計測し、最後1.0秒中央値を使用します。</p>
+      <p class="small">3点固定校正: Key 1 / Key 13 / Key 24 を各2.0秒計測し、最後1.0秒中央値を使用します。</p>
       <p class="small">Key ID採番ルール: 左→右の物理順（白黒共通連番）。</p>
       <div id="target" class="target">待機中</div>
       <div class="prog"><div id="pg"></div></div>
@@ -111,47 +111,36 @@
     (() => {
       "use strict";
       /*
-       * Layout definition (fixed)
-       * - 白鍵数: 13
-       * - 黒鍵数: 8
-       * - 合計鍵盤数: 21
+       * Layout definition (photo-first, fixed)
+       * - 白鍵数: 14
+       * - 黒鍵数: 10
+       * - 合計鍵盤数: 24
+       * - 黒鍵グルーピング: 3-2-3-2
        * - Key ID採番ルール: 左から右へ物理順（白鍵/黒鍵を同一連番）
-       * - 固定3点校正キー: Key 1 / Key 11 / Key 21
        */
-      const INSTRUMENT = "KAWAI_toy_piano_21_three_point";
+      const INSTRUMENT = "KAWAI_toy_piano_photo_layout_24";
       const MIN_HZ = 300, MAX_HZ = 2500, STABLE_FRAMES = 6, HOLD_MS = 1600;
       const STATES = {S0:"S0",S1:"S1",S2:"S2",S3:"S3",S4:"S4"};
       const SENS = {low:{conf:0.5,rms:0.02},mid:{conf:0.38,rms:0.015},high:{conf:0.28,rms:0.011}};
-      const PROJECT_KEY_COUNT = 21;
+      const WHITE_KEY_COUNT = 14;
+      const BLACK_GROUPS = [3,2,3,2];
+      const BLACK_COUNT = BLACK_GROUPS.reduce((a,b)=>a+b,0);
+      const TOTAL_KEYS = WHITE_KEY_COUNT + BLACK_COUNT;
       const C4_FREQ = 261.625565;
-      const CALIBRATION_KEY_IDS = [1,11,21];
-      const CALIBRATION_HINT = new Map([[1,"低音"],[11,"中音"],[21,"高音"]]);
-      const KEYS = [
-        {id:1, black:false, semitone:0, defaultLabel:"ド"},
-        {id:2, black:true, semitone:1, defaultLabel:"ド♯"},
-        {id:3, black:false, semitone:2, defaultLabel:"レ"},
-        {id:4, black:true, semitone:3, defaultLabel:"レ♯"},
-        {id:5, black:false, semitone:4, defaultLabel:"ミ"},
-        {id:6, black:false, semitone:5, defaultLabel:"ファ"},
-        {id:7, black:true, semitone:6, defaultLabel:"ファ♯"},
-        {id:8, black:false, semitone:7, defaultLabel:"ソ"},
-        {id:9, black:true, semitone:8, defaultLabel:"ソ♯"},
-        {id:10, black:false, semitone:9, defaultLabel:"ラ"},
-        {id:11, black:true, semitone:10, defaultLabel:"ラ♯"},
-        {id:12, black:false, semitone:11, defaultLabel:"シ"},
-        {id:13, black:false, semitone:12, defaultLabel:"ド"},
-        {id:14, black:true, semitone:13, defaultLabel:"ド♯"},
-        {id:15, black:false, semitone:14, defaultLabel:"レ"},
-        {id:16, black:true, semitone:15, defaultLabel:"レ♯"},
-        {id:17, black:false, semitone:16, defaultLabel:"ミ"},
-        {id:18, black:false, semitone:17, defaultLabel:"ファ"},
-        {id:19, black:true, semitone:18, defaultLabel:"ファ♯"},
-        {id:20, black:false, semitone:19, defaultLabel:"ソ"},
-        {id:21, black:false, semitone:21, defaultLabel:"ラ"}
-      ];
-      const TOTAL_KEYS = PROJECT_KEY_COUNT;
+      const BLACK_KEY_WIDTH_RATIO = 0.62;
+      const BLACK_KEY_CENTER_BIAS = 0;
+      const BLACK_BOUNDARIES = buildBlackBoundaries(WHITE_KEY_COUNT, BLACK_GROUPS);
+      const CALIBRATION_KEY_IDS = [1,13,24];
+      const CALIBRATION_HINT = new Map([[1,"低音"],[13,"中音"],[24,"高音"]]);
+      const KEYS = buildPhysicalKeys({
+        whiteKeyCount: WHITE_KEY_COUNT,
+        blackBoundaries: BLACK_BOUNDARIES,
+        calibrationKeyIds: CALIBRATION_KEY_IDS
+      });
       const WHITE_COUNT = KEYS.filter(k=>!k.black).length;
-      const BLACK_COUNT = KEYS.filter(k=>k.black).length;
+      const BLACK_COUNT_ACTUAL = KEYS.filter(k=>k.black).length;
+      if(WHITE_COUNT!==WHITE_KEY_COUNT) throw new Error(`WHITE_COUNT mismatch: expected ${WHITE_KEY_COUNT}, got ${WHITE_COUNT}`);
+      if(BLACK_COUNT_ACTUAL!==BLACK_COUNT) throw new Error(`BLACK_COUNT mismatch: expected ${BLACK_COUNT}, got ${BLACK_COUNT_ACTUAL}`);
       if(KEYS.length!==TOTAL_KEYS) throw new Error(`KEYS length mismatch: expected ${TOTAL_KEYS}, got ${KEYS.length}`);
       const DEFAULT_KEY_LABELS = Object.fromEntries(KEYS.map(k=>[String(k.id),k.defaultLabel]));
       const REFERENCE_KEYS = KEYS.map(k=>({
@@ -298,18 +287,21 @@
 
       function renderKeys(){
         E.keys.innerHTML=""; keyEls=new Map();
-        const ws=KEYS.filter(k=>!k.black), wc=ws.length, ww=100/wc, wi=new Map(ws.map((k,i)=>[k.id,i]));
+        const ws=KEYS.filter(k=>!k.black).sort((a,b)=>a.whitePos-b.whitePos);
+        const wc=ws.length;
+        const ww=100/wc;
         for(const k of ws){
-          const i=wi.get(k.id), d=document.createElement("div");
-          d.className="w"; d.style.left=`${(i*ww).toFixed(4)}%`; d.style.width=`${ww.toFixed(4)}%`; d.dataset.id=String(k.id);
+          const d=document.createElement("div");
+          d.className="w"; d.style.left=`${(k.whitePos*ww).toFixed(4)}%`; d.style.width=`${ww.toFixed(4)}%`; d.dataset.id=String(k.id);
           d.innerHTML=`<div class="txt">${k.id}<br>${escapeHTML(getKeyLabel(k.id)||"")}</div>`; E.keys.appendChild(d); keyEls.set(k.id,d);
         }
-        const bw=ww*0.62;
-        for(let idx=0;idx<KEYS.length;idx++){
-          const k=KEYS[idx]; if(!k.black) continue;
-          let prev=null; for(let i=idx-1;i>=0;i--) if(!KEYS[i].black){prev=KEYS[i].id;break;}
-          if(!prev) continue;
-          const left=(wi.get(prev)+1)*ww-bw/2, d=document.createElement("div");
+        const bw=ww*BLACK_KEY_WIDTH_RATIO;
+        const bs=KEYS.filter(k=>k.black).sort((a,b)=>a.boundaryAfterWhitePos-b.boundaryAfterWhitePos);
+        for(const k of bs){
+          if(typeof k.boundaryAfterWhitePos!=="number") continue;
+          const center=(k.boundaryAfterWhitePos+1+BLACK_KEY_CENTER_BIAS)*ww;
+          const left=center-bw/2;
+          const d=document.createElement("div");
           d.className="k"; d.style.left=`${left.toFixed(4)}%`; d.style.width=`${bw.toFixed(4)}%`; d.dataset.id=String(k.id);
           d.innerHTML=`<div class="txt">${k.id}<br>${escapeHTML(getKeyLabel(k.id)||"")}</div>`; E.keys.appendChild(d); keyEls.set(k.id,d);
         }
@@ -392,7 +384,7 @@
         if(!settings.debug) return;
         E.dbgText.textContent=[
           `state: ${state}`,`mic: ${mic}`,`reason: ${reason}`,
-          `layout: white=${WHITE_COUNT} black=${BLACK_COUNT} total=${TOTAL_KEYS} id_rule=left_to_right_physical`,
+          `layout: white=${WHITE_COUNT} black=${BLACK_COUNT} total=${TOTAL_KEYS} groups=${BLACK_GROUPS.join("-")} id_rule=left_to_right_physical`,
           `cal_keys: ${CALIBRATION_KEY_IDS.join(",")}`,
           `f0_hz(raw): ${pitch.freq?pitch.freq.toFixed(2):"-"}`,`f0_hz(ema): ${ema?ema.toFixed(2):"-"}`,
           `confidence: ${pitch.conf.toFixed(3)}`,`rms: ${pitch.rms.toFixed(4)}`,
@@ -756,6 +748,56 @@
             settings.keyLabels[id]=row.label.trim();
           }
         }
+      }
+
+      function buildBlackBoundaries(whiteCount, groups){
+        const out=[]; let cursor=1;
+        for(let gi=0;gi<groups.length;gi++){
+          const g=groups[gi];
+          for(let i=0;i<g;i++) out.push(cursor+i);
+          cursor+=g;
+          if(gi<groups.length-1) cursor+=1;
+        }
+        const maxBoundary=whiteCount-1;
+        return out.filter(x=>x>=1&&x<=maxBoundary);
+      }
+
+      function buildPhysicalKeys({whiteKeyCount, blackBoundaries, calibrationKeyIds}){
+        const blackSet=new Set(blackBoundaries);
+        const calibrationSet=new Set(calibrationKeyIds);
+        const keys=[];
+        let id=1;
+        for(let whitePos=0;whitePos<whiteKeyCount;whitePos++){
+          keys.push({
+            id,
+            black:false,
+            semitone:id-1,
+            defaultLabel:doremiFromSemitone(id-1),
+            whitePos,
+            calibrationAnchor:calibrationSet.has(id)
+          });
+          id++;
+          const boundary=whitePos+1;
+          if(blackSet.has(boundary)){
+            keys.push({
+              id,
+              black:true,
+              semitone:id-1,
+              defaultLabel:doremiFromSemitone(id-1),
+              boundaryAfterWhitePos:whitePos,
+              calibrationAnchor:calibrationSet.has(id)
+            });
+            id++;
+          }
+        }
+        return keys;
+      }
+
+      function doremiFromSemitone(semitoneFromLeft){
+        const names=["ド","ド♯","レ","レ♯","ミ","ファ","ファ♯","ソ","ソ♯","ラ","ラ♯","シ"];
+        const startOffset=5; // 左端をファ相当として表示
+        const idx=((semitoneFromLeft+startOffset)%12+12)%12;
+        return names[idx];
       }
 
       function escapeHTML(s){
