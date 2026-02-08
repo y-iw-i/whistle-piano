@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>口笛ピアノナビ 21鍵</title>
+  <title>口笛ピアノナビ 実機配列</title>
   <style>
     :root{--bg:#f3f8fc;--card:#fff;--ink:#163042;--line:#c8d9e3;--ok:#27935d;--warn:#d68a2a;--bad:#c94b49}
     *{box-sizing:border-box}body{margin:0;background:linear-gradient(150deg,#ecf6ff,#fff7eb);font-family:"Yu Gothic","Meiryo",sans-serif;color:var(--ink)}
@@ -15,7 +15,7 @@
     .vu{display:flex;gap:4px;align-items:flex-end;height:21px}.b{width:9px;border-radius:3px;background:#c8d4dc}.b:nth-child(1){height:8px}.b:nth-child(2){height:11px}.b:nth-child(3){height:14px}.b:nth-child(4){height:17px}.b:nth-child(5){height:20px}.b.a{background:#39a967}
     .badge{display:inline-block;padding:3px 8px;border-radius:999px;border:1px solid #d1dde4;background:#f2f7fa;font-weight:700;font-size:13px}.s2{background:#fff0ef;border-color:#f0c7c4}.s3{background:#fff8ea;border-color:#edd5ac}.s4{background:#ecf9f1;border-color:#bfe2cb}
     .result{min-height:105px;display:flex;flex-direction:column;justify-content:center;align-items:center;transition:.15s}.hide{opacity:0;pointer-events:none}
-    .unstable{opacity:.7;animation:blink .9s infinite}.key{font-size:clamp(36px,10vw,62px);font-weight:800;line-height:1}.label{font-size:clamp(28px,7vw,46px);font-weight:800;line-height:1.1}
+    .unstable{opacity:.7;animation:blink .9s infinite}.key{font-size:clamp(40px,11vw,68px);font-weight:800;line-height:1}.label{font-size:clamp(14px,4vw,24px);font-weight:700;line-height:1.2;color:#5e7483}
     .guide{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center}.dir{font-size:clamp(22px,6vw,42px);font-weight:800;text-align:center}
     .ring{width:72px;height:72px;border-radius:50%;margin:auto;border:6px solid #c6d1d7}.r0{border-color:#c6d1d7}.r1{border-color:var(--bad);animation:blink .8s infinite}.r2{border-color:var(--warn);animation:pulse 1.1s infinite}.r3{border-color:var(--ok)}
     .rt{font-size:12px;text-align:center;color:#5f7786}
@@ -31,14 +31,18 @@
     .wmsg{min-height:17px;color:#934216;font-size:13px;font-weight:700}
     .hist{display:flex;gap:6px;overflow-x:auto;border:1px solid #cadbe4;border-radius:10px;min-height:62px;padding:8px;background:#f8fbfd}
     .h{border:1px solid #b5cbd8;background:#eef7fd;border-radius:999px;padding:4px 9px;font-size:12px;font-weight:700;white-space:nowrap}.rest{background:#f6f0e6;border-color:#dac8a8}.act{background:#ffe9c6;border-color:#d69f4b}
+    .labels-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px}
+    .label-item{border:1px solid #c8d8e2;background:#f8fcff;border-radius:8px;padding:6px;display:flex;flex-direction:column;gap:3px}
+    .label-item span{font-size:11px;color:#597282;font-weight:700}
+    .label-item input{width:100%;font-size:12px;border:1px solid #b0c5d2;border-radius:7px;padding:4px 6px}
     pre{margin:0;white-space:pre-wrap;font-size:12px}
     @keyframes blink{0%,48%{opacity:1}50%,100%{opacity:.58}}@keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.08)}100%{transform:scale(1)}}
-    @media (max-width:760px){.status{grid-template-columns:1fr}.guide{grid-template-columns:1fr}.keys{height:184px}}
+    @media (max-width:760px){.status{grid-template-columns:1fr}.guide{grid-template-columns:1fr}.keys{height:184px}.labels-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   </style>
 </head>
 <body>
   <div class="app">
-    <h1>口笛ピアノナビ 21鍵</h1>
+    <h1>口笛ピアノナビ 実機配列</h1>
     <p class="sub">口笛の音程を検出し、今押すべき鍵盤位置を表示します（端末内処理）。</p>
 
     <section class="panel status">
@@ -68,7 +72,7 @@
       <div class="prog"><div id="pg"></div></div>
       <div id="sub" class="small">校正開始を押してください</div>
       <div id="wmsg" class="wmsg"></div>
-      <div class="row"><button id="calStart" class="pri">全21鍵を校正</button><button id="calCancel" class="warn" disabled>中止</button></div>
+      <div class="row"><button id="calStart" class="pri">全鍵を校正</button><button id="calCancel" class="warn" disabled>中止</button></div>
       <div id="calMeta" class="small"></div>
     </section>
 
@@ -92,6 +96,8 @@
       <h2>設定</h2>
       <div class="row"><label for="sens">感度</label><select id="sens"><option value="low">低</option><option value="mid">中</option><option value="high">高</option></select></div>
       <div class="row"><label for="dbg">デバッグ表示</label><input id="dbg" type="checkbox"></div>
+      <div class="row"><span class="small">Key番号を主表示。ドレミは以下で編集可能（任意）</span></div>
+      <div id="labelsGrid" class="labels-grid"></div>
       <div class="row"><button id="exp">校正JSON出力</button><button id="imp">校正JSON入力</button><button id="reset" class="warn">校正削除</button></div>
       <div id="storage" class="small"></div>
     </section>
@@ -103,16 +109,26 @@
   <script>
     (() => {
       "use strict";
-      const INSTRUMENT = "KAWAI_toy_piano_21";
+      /*
+       * Physical layout (photo-based, fixed)
+       * - 白鍵数: 14
+       * - 黒鍵数: 10
+       * - 合計鍵盤数: 24
+       * - 黒鍵グルーピング: 3-2-3-2
+       * - Key ID採番ルール: 左から右へ物理順（白鍵/黒鍵を同一連番）
+       */
+      const INSTRUMENT = "KAWAI_toy_piano_photo_layout_24";
       const MIN_HZ = 300, MAX_HZ = 2500, STABLE_FRAMES = 6, HOLD_MS = 1600;
       const STATES = {S0:"S0",S1:"S1",S2:"S2",S3:"S3",S4:"S4"};
       const SENS = {low:{conf:0.5,rms:0.02},mid:{conf:0.38,rms:0.015},high:{conf:0.28,rms:0.011}};
-      const KEYS = [
-        {id:1,label:"ド",black:false},{id:2,label:"ド♯",black:true},{id:3,label:"レ",black:false},{id:4,label:"レ♯",black:true},{id:5,label:"ミ",black:false},
-        {id:6,label:"ファ",black:false},{id:7,label:"ファ♯",black:true},{id:8,label:"ソ",black:false},{id:9,label:"ソ♯",black:true},{id:10,label:"ラ",black:false},
-        {id:11,label:"ラ♯",black:true},{id:12,label:"シ",black:false},{id:13,label:"ド",black:false},{id:14,label:"ド♯",black:true},{id:15,label:"レ",black:false},
-        {id:16,label:"レ♯",black:true},{id:17,label:"ミ",black:false},{id:18,label:"ファ",black:false},{id:19,label:"ファ♯",black:true},{id:20,label:"ソ",black:false},{id:21,label:"ラ",black:false}
-      ];
+      const WHITE_KEY_COUNT = 14;
+      const BLACK_GROUPS = [3,2,3,2];
+      const BLACK_BOUNDARIES = buildBlackBoundaries(WHITE_KEY_COUNT, BLACK_GROUPS);
+      const KEYS = buildPhysicalKeys(WHITE_KEY_COUNT, BLACK_BOUNDARIES);
+      const WHITE_COUNT = KEYS.filter(k=>!k.black).length;
+      const BLACK_COUNT = KEYS.filter(k=>k.black).length;
+      const TOTAL_KEYS = KEYS.length;
+      const DEFAULT_KEY_LABELS = Object.fromEntries(KEYS.map(k=>[String(k.id),""]));
       const KEY_MAP = new Map(KEYS.map(k=>[k.id,k]));
       const E = {
         lamp:gid("lamp"),micText:gid("micText"),vu:[...document.querySelectorAll("#vu .b")],stateBadge:gid("stateBadge"),
@@ -120,14 +136,14 @@
         start:gid("start"),stop:gid("stop"),tglCal:gid("tglCal"),tglSet:gid("tglSet"),calPanel:gid("calPanel"),setPanel:gid("setPanel"),
         target:gid("target"),pg:gid("pg"),sub:gid("sub"),wmsg:gid("wmsg"),calMeta:gid("calMeta"),calStart:gid("calStart"),calCancel:gid("calCancel"),
         recStart:gid("recStart"),recStop:gid("recStop"),playStart:gid("playStart"),playStop:gid("playStop"),hist:gid("hist"),
-        mode:gid("mode"),bpm:gid("bpm"),bpmText:gid("bpmText"),sens:gid("sens"),dbg:gid("dbg"),dbgPanel:gid("dbgPanel"),dbgText:gid("dbgText"),
+        mode:gid("mode"),bpm:gid("bpm"),bpmText:gid("bpmText"),sens:gid("sens"),dbg:gid("dbg"),labelsGrid:gid("labelsGrid"),dbgPanel:gid("dbgPanel"),dbgText:gid("dbgText"),
         exp:gid("exp"),imp:gid("imp"),reset:gid("reset"),storage:gid("storage"),impFile:gid("impFile")
       };
       let keyEls = new Map(), calOpen = false, setOpen = false;
       let ctx=null, an=null, stream=null, raf=0, buf=null;
       let state=STATES.S0, mic="off", reason="idle";
       let pitch={freq:null,conf:0,rms:0,inRange:false}, ema=null, near=null, cand={id:null,label:"",frames:0}, ok={id:null,label:"",seen:0};
-      let cal=null, settings={sensitivity:"mid",debug:false,mode:"recorded",bpm:120};
+      let cal=null, settings={sensitivity:"mid",debug:false,mode:"recorded",bpm:120,keyLabels:{...DEFAULT_KEY_LABELS}};
       let note={on:false,events:[],cur:null,start:0}, play={on:false,id:null,idx:-1,token:0}, cals={on:false,cancel:false};
       let msgTmp="", msgUntil=0;
       const store = createStore();
@@ -136,9 +152,11 @@
         renderKeys();
         registerSW();
         bind();
+        E.calStart.textContent=`全${TOTAL_KEYS}鍵を校正`;
         await store.init();
         await loadSaved();
         updateCalMeta();
+        renderLabelEditor();
         renderHistory();
         calOpen = !cal;
         ui();
@@ -232,8 +250,8 @@
         if(!cal){state=STATES.S2; reason="needCal"; return;}
         ema=ema==null?p.freq:ema*0.68+p.freq*0.32;
         near=nearest(ema,cal.keys); if(!near){state=STATES.S2;reason="unvoiced";return;}
-        if(cand.id===near.id)cand.frames++; else {cand.id=near.id;cand.label=near.label;cand.frames=1;}
-        if(cand.frames>=STABLE_FRAMES){ok.id=near.id;ok.label=near.label;ok.seen=performance.now();state=STATES.S4;reason="ok";}
+        if(cand.id===near.id)cand.frames++; else {cand.id=near.id;cand.label=getKeyLabel(near.id);cand.frames=1;}
+        if(cand.frames>=STABLE_FRAMES){ok.id=near.id;ok.label=getKeyLabel(near.id);ok.seen=performance.now();state=STATES.S4;reason="ok";}
         else {state=STATES.S3;reason="warm";}
       }
 
@@ -242,7 +260,7 @@
         let best=null;
         for(const k of table){
           const cents=1200*Math.log2(freq/k.freq_hz), abs=Math.abs(cents);
-          if(!best||abs<best.abs) best={id:k.id,label:k.label,cents,abs};
+          if(!best||abs<best.abs) best={id:k.id,label:getKeyLabel(k.id),cents,abs};
         }
         return best;
       }
@@ -253,7 +271,7 @@
         for(const k of ws){
           const i=wi.get(k.id), d=document.createElement("div");
           d.className="w"; d.style.left=`${(i*ww).toFixed(4)}%`; d.style.width=`${ww.toFixed(4)}%`; d.dataset.id=String(k.id);
-          d.innerHTML=`<div class="txt">${k.id}<br>${k.label}</div>`; E.keys.appendChild(d); keyEls.set(k.id,d);
+          d.innerHTML=`<div class="txt">${k.id}<br>${escapeHTML(getKeyLabel(k.id)||"")}</div>`; E.keys.appendChild(d); keyEls.set(k.id,d);
         }
         const bw=ww*0.62;
         for(let idx=0;idx<KEYS.length;idx++){
@@ -262,7 +280,7 @@
           if(!prev) continue;
           const left=(wi.get(prev)+1)*ww-bw/2, d=document.createElement("div");
           d.className="k"; d.style.left=`${left.toFixed(4)}%`; d.style.width=`${bw.toFixed(4)}%`; d.dataset.id=String(k.id);
-          d.innerHTML=`<div class="txt">${k.id}<br>${k.label}</div>`; E.keys.appendChild(d); keyEls.set(k.id,d);
+          d.innerHTML=`<div class="txt">${k.id}<br>${escapeHTML(getKeyLabel(k.id)||"")}</div>`; E.keys.appendChild(d); keyEls.set(k.id,d);
         }
       }
 
@@ -300,8 +318,8 @@
       }
 
       function uiResult(){
-        if(state===STATES.S4&&ok.id){E.result.classList.remove("hide","unstable");E.rk.textContent=`Key ${ok.id}`;E.rl.textContent=ok.label;return;}
-        if(state===STATES.S3&&near){E.result.classList.remove("hide");E.result.classList.add("unstable");E.rk.textContent=`Key ${near.id}`;E.rl.textContent=near.label;return;}
+        if(state===STATES.S4&&ok.id){E.result.classList.remove("hide","unstable");E.rk.textContent=`Key ${ok.id}`;E.rl.textContent=getKeyLabel(ok.id)||"ラベル未設定";return;}
+        if(state===STATES.S3&&near){E.result.classList.remove("hide");E.result.classList.add("unstable");E.rk.textContent=`Key ${near.id}`;E.rl.textContent=getKeyLabel(near.id)||"ラベル未設定";return;}
         E.result.classList.add("hide");E.result.classList.remove("unstable");
       }
 
@@ -343,6 +361,7 @@
         if(!settings.debug) return;
         E.dbgText.textContent=[
           `state: ${state}`,`mic: ${mic}`,`reason: ${reason}`,
+          `layout: white=${WHITE_COUNT} black=${BLACK_COUNT} total=${TOTAL_KEYS} groups=${BLACK_GROUPS.join("-")}`,
           `f0_hz(raw): ${pitch.freq?pitch.freq.toFixed(2):"-"}`,`f0_hz(ema): ${ema?ema.toFixed(2):"-"}`,
           `confidence: ${pitch.conf.toFixed(3)}`,`rms: ${pitch.rms.toFixed(4)}`,
           `candidate: ${cand.id?`Key ${cand.id} (${cand.frames}/${STABLE_FRAMES})`:"-"}`,
@@ -360,9 +379,12 @@
           settings.sensitivity=SENS[ss.sensitivity]?ss.sensitivity:"mid";
           settings.debug=!!ss.debug; settings.mode=ss.mode==="fixed"?"fixed":"recorded";
           settings.bpm=clamp(Number(ss.bpm)||120,60,180);
+          if(ss.keyLabels&&typeof ss.keyLabels==="object"){
+            settings.keyLabels={...DEFAULT_KEY_LABELS,...ss.keyLabels};
+          }
         }
         const sc=await store.get("calibration");
-        if(sc){const v=validateCal(sc); if(v.ok) cal=v.data;}
+        if(sc){const v=validateCal(sc); if(v.ok){ cal=v.data; syncLabelsFromCalibration(); }}
         const sm=await store.get("melody");
         if(Array.isArray(sm)) note.events=sanitizeEvents(sm);
         E.sens.value=settings.sensitivity; E.dbg.checked=settings.debug; E.mode.value=settings.mode;
@@ -382,11 +404,12 @@
           if(cals.cancel) break;
           const k=KEYS[i]; let done=false;
           while(!done&&!cals.cancel){
-            E.target.textContent=`Key ${k.id}（${k.label}）を鳴らしてください`;
+            const sub=getKeyLabel(k.id);
+            E.target.textContent=sub?`Key ${k.id}（${sub}）を鳴らしてください`:`Key ${k.id} を鳴らしてください`;
             const cap=await calStep(i);
             if(cap.cancelled) break;
             if(!cap.ok){E.wmsg.textContent="音が小さいか不安定です。同じ鍵盤をもう一度。"; await sleep(220); continue;}
-            rows.push({id:k.id,label:k.label,freq_hz:Number(cap.median.toFixed(3))});
+            rows.push({id:k.id,label:getKeyLabel(k.id),freq_hz:Number(cap.median.toFixed(3))});
             E.wmsg.textContent=cap.warn||""; done=true; await sleep(120);
           }
         }
@@ -443,7 +466,7 @@
       function openSeg(token,at){
         if(token==="rest"){note.cur={type:"rest",startAt:at};return;}
         const id=Number(token.split(":")[1]), k=KEY_MAP.get(id);
-        note.cur={type:"key",keyId:id,label:k?k.label:"",startAt:at};
+        note.cur={type:"key",keyId:id,label:k?getKeyLabel(id):"",startAt:at};
       }
 
       function closeSeg(at){
@@ -481,7 +504,7 @@
           const d=document.createElement("div");
           d.className=`h${ev.type==="rest"?" rest":""}${play.on&&i===play.idx?" act":""}`;
           d.style.minWidth=`${clamp(Math.round((ev.duration_ms||120)/8),52,220)}px`;
-          d.textContent=ev.type==="rest"?"休符":`Key ${ev.keyId} ${ev.label}`;
+          d.textContent=ev.type==="rest"?"休符":`Key ${ev.keyId} ${ev.label||getKeyLabel(ev.keyId)||""}`;
           E.hist.appendChild(d);
         });
       }
@@ -499,6 +522,42 @@
         E.calMeta.textContent=`校正データ: ${dt.toLocaleString("ja-JP")} / ${cal.keys.length}鍵 / ${f1}Hz〜${f2}Hz`;
       }
 
+      function renderLabelEditor(){
+        E.labelsGrid.innerHTML="";
+        for(const key of KEYS){
+          const box=document.createElement("div");
+          box.className="label-item";
+          const lbl=document.createElement("span");
+          lbl.textContent=`Key ${key.id}`;
+          const input=document.createElement("input");
+          input.type="text";
+          input.maxLength=10;
+          input.value=getKeyLabel(key.id);
+          input.placeholder="ドレミ等";
+          input.setAttribute("aria-label",`Key ${key.id} label`);
+          input.addEventListener("change",async()=>{
+            settings.keyLabels[String(key.id)]=String(input.value||"").trim();
+            if(cal&&Array.isArray(cal.keys)){
+              const row=cal.keys.find(r=>r.id===key.id);
+              if(row) row.label=settings.keyLabels[String(key.id)];
+              await store.set("calibration",cal);
+              updateCalMeta();
+            }
+            await saveSettings();
+            renderKeys();
+            ui();
+          });
+          box.appendChild(lbl);
+          box.appendChild(input);
+          E.labelsGrid.appendChild(box);
+        }
+      }
+
+      function getKeyLabel(id){
+        if(!settings.keyLabels) settings.keyLabels={...DEFAULT_KEY_LABELS};
+        return String(settings.keyLabels[String(id)]||"");
+      }
+
       async function resetCal(){
         if(!window.confirm("校正データを削除しますか？")) return;
         cal=null; await store.remove("calibration"); updateCalMeta(); calOpen=true; flash("校正データを削除しました",2000); ui();
@@ -514,19 +573,19 @@
         const f=E.impFile.files&&E.impFile.files[0]; if(!f) return;
         let p; try{p=JSON.parse(await f.text());}catch(_){flash("JSON形式が不正です",2200);E.impFile.value="";return;}
         const v=validateCal(p); if(!v.ok){flash(`インポート失敗: ${v.err}`,2600);E.impFile.value="";return;}
-        cal=v.data; await store.set("calibration",cal); updateCalMeta(); calOpen=false; flash("校正データをインポートしました",2300); E.impFile.value=""; ui();
+        cal=v.data; syncLabelsFromCalibration(); await saveSettings(); renderLabelEditor(); renderKeys();
+        await store.set("calibration",cal); updateCalMeta(); calOpen=false; flash("校正データをインポートしました",2300); E.impFile.value=""; ui();
       }
 
       function validateCal(raw){
         if(!raw||typeof raw!=="object") return {ok:false,err:"JSONオブジェクトではありません"};
         if(raw.instrument!==INSTRUMENT) return {ok:false,err:"instrument が一致しません"};
-        if(!Array.isArray(raw.keys)||raw.keys.length!==KEYS.length) return {ok:false,err:"keys は21件必要です"};
+        if(!Array.isArray(raw.keys)||raw.keys.length!==KEYS.length) return {ok:false,err:`keys は${TOTAL_KEYS}件必要です`};
         const m=new Map(raw.keys.map(x=>[Number(x.id),x])), n=[];
         for(const b of KEYS){
           const it=m.get(b.id); if(!it) return {ok:false,err:`Key ${b.id} がありません`};
-          if(String(it.label)!==b.label) return {ok:false,err:`Key ${b.id} のlabelが不正です`};
           const hz=Number(it.freq_hz); if(!Number.isFinite(hz)||hz<=0) return {ok:false,err:`Key ${b.id} のfreq_hzが不正です`};
-          n.push({id:b.id,label:b.label,freq_hz:Number(hz.toFixed(3))});
+          n.push({id:b.id,label:String(it.label||getKeyLabel(b.id)||""),freq_hz:Number(hz.toFixed(3))});
         }
         return {ok:true,data:{instrument:INSTRUMENT,created_at:typeof raw.created_at==="string"?raw.created_at:new Date().toISOString(),keys:n}};
       }
@@ -535,8 +594,47 @@
         return arr.map(e=>{
           if(e.type==="rest") return {type:"rest",start_ms:Math.max(0,Number(e.start_ms)||0),duration_ms:Math.max(40,Number(e.duration_ms)||120)};
           const id=Number(e.keyId); if(!KEY_MAP.has(id)) return null;
-          return {type:"key",keyId:id,label:KEY_MAP.get(id).label,start_ms:Math.max(0,Number(e.start_ms)||0),duration_ms:Math.max(40,Number(e.duration_ms)||120)};
+          return {type:"key",keyId:id,label:String(e.label||getKeyLabel(id)||""),start_ms:Math.max(0,Number(e.start_ms)||0),duration_ms:Math.max(40,Number(e.duration_ms)||120)};
         }).filter(Boolean);
+      }
+
+      function syncLabelsFromCalibration(){
+        if(!cal||!Array.isArray(cal.keys)) return;
+        for(const row of cal.keys){
+          const id=String(row.id);
+          if(!(id in DEFAULT_KEY_LABELS)) continue;
+          if(typeof row.label==="string"&&row.label.trim()!==""){
+            settings.keyLabels[id]=row.label.trim();
+          }
+        }
+      }
+
+      function buildBlackBoundaries(whiteCount, groups){
+        const out=[]; let cursor=1;
+        for(let gi=0;gi<groups.length;gi++){
+          const g=groups[gi];
+          for(let i=0;i<g;i++) out.push(cursor+i);
+          cursor+=g;
+          if(gi<groups.length-1) cursor+=1;
+        }
+        const maxBoundary=whiteCount-1;
+        return out.filter(x=>x>=1&&x<=maxBoundary);
+      }
+
+      function buildPhysicalKeys(whiteCount, blackBoundaries){
+        const bSet=new Set(blackBoundaries);
+        const out=[]; let id=1;
+        for(let wi=1;wi<=whiteCount;wi++){
+          out.push({id:id++,black:false,whiteIndex:wi,boundaryIndex:null});
+          if(wi<whiteCount&&bSet.has(wi)){
+            out.push({id:id++,black:true,whiteIndex:null,boundaryIndex:wi});
+          }
+        }
+        return out;
+      }
+
+      function escapeHTML(s){
+        return String(s||"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
       }
 
       function registerSW(){
