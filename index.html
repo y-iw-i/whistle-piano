@@ -43,7 +43,7 @@
 <body>
   <div class="app">
     <h1>口笛ピアノナビ 実機配列</h1>
-    <p class="sub">口笛の音程を検出し、今押すべき鍵盤位置を表示します（端末内処理）。Key ID採番ルール: 左→右の物理順（白黒共通連番）。3点校正: Key 1 / Key 13 / Key 24。</p>
+    <p class="sub">口笛の音程を検出し、今押すべき鍵盤位置を表示します（端末内処理）。Key ID採番ルール: 左→右の物理順（白黒共通連番）。3点校正: 白鍵3点（低音/中音/高音）。</p>
 
     <section class="panel status">
       <div class="box"><div class="t">マイク</div><div class="mic"><span id="lamp" class="lamp off"></span><span id="micText">OFF</span></div></div>
@@ -67,7 +67,7 @@
 
     <section id="calPanel" class="panel hide2">
       <h2>校正モード</h2>
-      <p class="small">3点固定校正: Key 1 / Key 13 / Key 24 を各2.0秒計測し、最後1.0秒中央値を使用します。</p>
+      <p class="small">3点固定校正: 白鍵3点（低音/中音/高音）を各2.0秒計測し、最後1.0秒中央値を使用します。</p>
       <p class="small">Key ID採番ルール: 左→右の物理順（白黒共通連番）。</p>
       <div id="target" class="target">待機中</div>
       <div class="prog"><div id="pg"></div></div>
@@ -120,6 +120,7 @@
        */
       const INSTRUMENT = "KAWAI_toy_piano_photo_layout_24";
       const MIN_HZ = 300, MAX_HZ = 2500, STABLE_FRAMES = 6, HOLD_MS = 1600;
+      const SWITCH_IMPROVE_CENTS = 30, SWITCH_FRAMES = 3;
       const STATES = {S0:"S0",S1:"S1",S2:"S2",S3:"S3",S4:"S4"};
       const SENS = {low:{conf:0.5,rms:0.02},mid:{conf:0.38,rms:0.015},high:{conf:0.28,rms:0.011}};
       const WHITE_KEY_COUNT = 14;
@@ -130,8 +131,9 @@
       const BLACK_KEY_WIDTH_RATIO = 0.62;
       const BLACK_KEY_CENTER_BIAS = 0;
       const BLACK_BOUNDARIES = buildBlackBoundaries(WHITE_KEY_COUNT, BLACK_GROUPS);
-      const CALIBRATION_KEY_IDS = [1,13,24];
-      const CALIBRATION_HINT = new Map([[1,"低音"],[13,"中音"],[24,"高音"]]);
+      const DESIRED_CALIBRATION_KEY_IDS = [1,13,24];
+      const CALIBRATION_KEY_IDS = ensureWhiteCalibrationKeys(DESIRED_CALIBRATION_KEY_IDS, WHITE_KEY_COUNT, BLACK_BOUNDARIES);
+      const CALIBRATION_HINT = new Map(CALIBRATION_KEY_IDS.map((id,idx)=>[id,["低音","中音","高音"][idx]||`基準${idx+1}`]));
       const KEYS = buildPhysicalKeys({
         whiteKeyCount: WHITE_KEY_COUNT,
         blackBoundaries: BLACK_BOUNDARIES,
@@ -162,7 +164,8 @@
       let keyEls = new Map(), calOpen = false, setOpen = false;
       let ctx=null, an=null, stream=null, raf=0, buf=null;
       let state=STATES.S0, mic="off", reason="idle";
-      let pitch={freq:null,conf:0,rms:0,inRange:false}, ema=null, near=null, cand={id:null,label:"",frames:0}, ok={id:null,label:"",seen:0};
+      let pitch={freq:null,conf:0,rms:0,inRange:false,bestCorr:0,secondCorr:0,peakSharpness:0}, ema=null, near=null, cand={id:null,label:"",frames:0}, ok={id:null,label:"",seen:0};
+      let switchGate={id:null,frames:0,improve:0};
       let cal=null, settings={sensitivity:"mid",debug:false,mode:"recorded",bpm:120,keyLabels:{...DEFAULT_KEY_LABELS}};
       let note={on:false,events:[],cur:null,start:0}, play={on:false,id:null,idx:-1,token:0}, cals={on:false,cancel:false};
       let msgTmp="", msgUntil=0;
@@ -210,8 +213,11 @@
           stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
           ctx=new (window.AudioContext||window.webkitAudioContext)();
           const src=ctx.createMediaStreamSource(stream);
-          an=ctx.createAnalyser(); an.fftSize=2048; an.smoothingTimeConstant=0;
-          src.connect(an); buf=new Float32Array(an.fftSize);
+          an=ctx.createAnalyser(); an.fftSize=4096; an.smoothingTimeConstant=0;
+          const hp=ctx.createBiquadFilter(); hp.type="highpass"; hp.frequency.value=500; hp.Q.value=0.707;
+          const lp=ctx.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=3000; lp.Q.value=0.707;
+          src.connect(hp); hp.connect(lp); lp.connect(an);
+          buf=new Float32Array(an.fftSize);
           mic="on"; state=STATES.S2; reason=cal?"quiet":"needCal";
           tick();
         }catch(err){
@@ -225,7 +231,7 @@
         if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
         if(ctx){await ctx.close();ctx=null;}
         an=null; buf=null;
-        pitch={freq:null,conf:0,rms:0,inRange:false}; ema=null; near=null; cand={id:null,label:"",frames:0};
+        pitch={freq:null,conf:0,rms:0,inRange:false,bestCorr:0,secondCorr:0,peakSharpness:0}; ema=null; near=null; cand={id:null,label:"",frames:0}; switchGate={id:null,frames:0,improve:0};
         mic="off"; state=STATES.S0; reason="idle"; ui();
       }
 
@@ -245,32 +251,85 @@
         let rms=0,mean=0,n=a.length;
         for(let i=0;i<n;i++){const v=a[i];rms+=v*v;mean+=v;}
         rms=Math.sqrt(rms/n); mean/=n;
-        if(rms<rmsFloor*0.5) return {freq:null,conf:0,rms,inRange:false};
-        for(let i=0;i<n;i++) a[i]-=mean;
+        if(rms<rmsFloor*0.5) return {freq:null,conf:0,rms,inRange:false,bestCorr:0,secondCorr:0,peakSharpness:0};
+
+        const sig=new Float32Array(n);
+        for(let i=0;i<n;i++) sig[i]=a[i]-mean;
+
         const minLag=Math.floor(sr/MAX_HZ), maxLag=Math.floor(sr/MIN_HZ);
-        let bestLag=-1,best=-1;
+        const corr=new Float32Array(maxLag+1);
+        let bestLag=-1,best=-1,secondBest=-1;
         for(let lag=minLag;lag<=maxLag;lag++){
           let num=0,da=0,db=0,lim=n-lag;
-          for(let i=0;i<lim;i++){const x=a[i],y=a[i+lag];num+=x*y;da+=x*x;db+=y*y;}
-          const c=num/(Math.sqrt(da*db)+1e-12); if(c>best){best=c;bestLag=lag;}
+          for(let i=0;i<lim;i++){const x=sig[i],y=sig[i+lag];num+=x*y;da+=x*x;db+=y*y;}
+          const c=num/(Math.sqrt(da*db)+1e-12);
+          corr[lag]=c;
+          if(c>best){secondBest=best;best=c;bestLag=lag;} else if(c>secondBest){secondBest=c;}
         }
-        const conf=clamp((best-0.2)/0.75,0,1);
-        if(bestLag<=0||best<0.24) return {freq:null,conf,rms,inRange:false};
-        const f=sr/bestLag; return {freq:f,conf,rms,inRange:f>=MIN_HZ&&f<=MAX_HZ};
+        if(bestLag<=0||best<0.18) return {freq:null,conf:0,rms,inRange:false,bestCorr:best,secondCorr:Math.max(0,secondBest),peakSharpness:Math.max(0,best-secondBest)};
+
+        const left=corr[bestLag-1]??corr[bestLag];
+        const mid=corr[bestLag];
+        const right=corr[bestLag+1]??corr[bestLag];
+        const denom=(left-2*mid+right);
+        let frac=0;
+        if(Math.abs(denom)>1e-9) frac=clamp(0.5*(left-right)/denom,-0.5,0.5);
+        let lag=bestLag+frac;
+
+        const doubleLag=Math.round(lag*2);
+        const octCorr=(doubleLag<=maxLag)?corr[doubleLag]:-1;
+        if(Number.isFinite(octCorr)&&octCorr>best*0.92){
+          lag*=2;
+        }
+
+        const sharp=Math.max(0,best-secondBest);
+        const conf=clamp(((best-0.2)/0.7)*0.7 + (sharp/0.18)*0.3,0,1);
+        const isValidPeak=best>=0.24 && sharp>=0.035;
+        if(!isValidPeak) return {freq:null,conf,rms,inRange:false,bestCorr:best,secondCorr:Math.max(0,secondBest),peakSharpness:sharp};
+
+        const f=sr/lag;
+        return {freq:f,conf,rms,inRange:f>=MIN_HZ&&f<=MAX_HZ,bestCorr:best,secondCorr:Math.max(0,secondBest),peakSharpness:sharp};
       }
 
       function applyPitch(p){
         if(mic!=="on") return;
-        const pr=profile(), enough=p.rms>=pr.rms, valid=!!p.freq&&p.inRange&&p.conf>=pr.conf;
+        const pr=profile();
+        const enough=p.rms>=pr.rms;
+        const peakEnough=p.bestCorr>=0.24&&p.peakSharpness>=0.035;
+        const valid=!!p.freq&&p.inRange&&p.conf>=pr.conf&&peakEnough;
         if(!valid){
-          near=null; cand.id=null; cand.frames=0; cand.label="";
-          if(!cal) reason="needCal"; else if(!enough) reason="quiet"; else if(!p.freq) reason="unvoiced"; else if(!p.inRange) reason="out"; else reason="lowConf";
+          near=null; cand.id=null; cand.frames=0; cand.label=""; switchGate={id:null,frames:0,improve:0};
+          if(!cal) reason="needCal";
+          else if(!enough) reason="quiet";
+          else if(!p.freq) reason="unvoiced";
+          else if(!p.inRange) reason="out";
+          else reason="lowConf";
           state=STATES.S2; if(!enough) ema=null; return;
         }
         if(!cal){state=STATES.S2; reason="needCal"; return;}
-        ema=ema==null?p.freq:ema*0.68+p.freq*0.32;
+        ema=ema==null?p.freq:ema*0.7+p.freq*0.3;
         near=nearest(ema,cal.keys); if(!near){state=STATES.S2;reason="unvoiced";return;}
+
         if(cand.id===near.id)cand.frames++; else {cand.id=near.id;cand.label=getKeyLabel(near.id);cand.frames=1;}
+
+        if(ok.id&&near.id!==ok.id){
+          const curRef=cal.keys.find(k=>k.id===ok.id);
+          const curCent=curRef?Math.abs(1200*Math.log2(ema/curRef.freq_hz)):Infinity;
+          const improve=curCent-near.abs;
+          if(improve>=SWITCH_IMPROVE_CENTS){
+            if(switchGate.id===near.id){switchGate.frames++; if(improve>switchGate.improve)switchGate.improve=improve;}
+            else switchGate={id:near.id,frames:1,improve};
+          }else switchGate={id:null,frames:0,improve:0};
+
+          if(switchGate.id===near.id&&switchGate.frames>=SWITCH_FRAMES&&cand.frames>=Math.max(2,STABLE_FRAMES-2)){
+            ok.id=near.id;ok.label=getKeyLabel(near.id);ok.seen=performance.now();
+            switchGate={id:null,frames:0,improve:0};
+            state=STATES.S4; reason="ok"; return;
+          }
+          state=STATES.S4; reason="hold"; return;
+        }
+
+        switchGate={id:null,frames:0,improve:0};
         if(cand.frames>=STABLE_FRAMES){ok.id=near.id;ok.label=getKeyLabel(near.id);ok.seen=performance.now();state=STATES.S4;reason="ok";}
         else {state=STATES.S3;reason="warm";}
       }
@@ -382,15 +441,25 @@
       function uiDebug(){
         E.dbgPanel.classList.toggle("hide2",!settings.debug);
         if(!settings.debug) return;
+        const selectedDelta=(near&&Number.isFinite(near.cents))?near.cents:null;
         E.dbgText.textContent=[
           `state: ${state}`,`mic: ${mic}`,`reason: ${reason}`,
           `layout: white=${WHITE_COUNT} black=${BLACK_COUNT} total=${TOTAL_KEYS} groups=${BLACK_GROUPS.join("-")} id_rule=left_to_right_physical`,
           `cal_keys: ${CALIBRATION_KEY_IDS.join(",")}`,
-          `f0_hz(raw): ${pitch.freq?pitch.freq.toFixed(2):"-"}`,`f0_hz(ema): ${ema?ema.toFixed(2):"-"}`,
-          `confidence: ${pitch.conf.toFixed(3)}`,`rms: ${pitch.rms.toFixed(4)}`,
+          `f0_hz(raw): ${pitch.freq?pitch.freq.toFixed(2):"-"}`,
+          `f0_hz(ema): ${ema?ema.toFixed(2):"-"}`,
+          `confidence: ${pitch.conf.toFixed(3)}`,
+          `rms: ${pitch.rms.toFixed(4)}`,
+          `bestCorr: ${(pitch.bestCorr||0).toFixed(4)}`,
+          `secondCorr: ${(pitch.secondCorr||0).toFixed(4)}`,
+          `sharpness(best-second): ${(pitch.peakSharpness||0).toFixed(4)}`,
+          `selected_key_cent_delta: ${selectedDelta==null?"-":selectedDelta.toFixed(2)}`,
           `candidate: ${cand.id?`Key ${cand.id} (${cand.frames}/${STABLE_FRAMES})`:"-"}`,
-          `confirmed: ${ok.id?`Key ${ok.id}`:"-"}`,`calibrated: ${cal?"yes":"no"}`,
-          `recording: ${note.on?"on":"off"} events=${note.events.length}`,`playback: ${play.on?"on":"off"}`
+          `confirmed: ${ok.id?`Key ${ok.id}`:"-"}`,
+          `hysteresis: ${switchGate.id?`wait Key ${switchGate.id} (${switchGate.frames}/${SWITCH_FRAMES}) improve=${switchGate.improve.toFixed(1)}c`:"idle"}`,
+          `calibrated: ${cal?"yes":"no"}`,
+          `recording: ${note.on?"on":"off"} events=${note.events.length}`,
+          `playback: ${play.on?"on":"off"}`
         ].join("\n");
       }
 
@@ -760,6 +829,30 @@
         }
         const maxBoundary=whiteCount-1;
         return out.filter(x=>x>=1&&x<=maxBoundary);
+      }
+
+      function ensureWhiteCalibrationKeys(desiredIds, whiteCount, blackBoundaries){
+        const blackBoundarySet=new Set(blackBoundaries);
+        const toWhiteId=(id)=>{
+          const n=Math.max(1,Math.round(Number(id)||1));
+          let whiteIndex=n;
+          for(let b=1;b<whiteCount;b++){
+            if(blackBoundarySet.has(b)&&n>b) whiteIndex--;
+          }
+          return clamp(whiteIndex,1,whiteCount);
+        };
+        const raw=Array.isArray(desiredIds)&&desiredIds.length?desiredIds:[1,Math.ceil(whiteCount/2),whiteCount];
+        const used=new Set();
+        return raw.map((id,idx)=>{
+          let wid=toWhiteId(id);
+          while(used.has(wid)&&wid<whiteCount) wid++;
+          while(used.has(wid)&&wid>1) wid--;
+          if(used.has(wid)){
+            for(let i=1;i<=whiteCount;i++) if(!used.has(i)){wid=i;break;}
+          }
+          used.add(wid);
+          return wid;
+        });
       }
 
       function buildPhysicalKeys({whiteKeyCount, blackBoundaries, calibrationKeyIds}){
